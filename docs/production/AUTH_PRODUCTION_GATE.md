@@ -11,8 +11,8 @@ Dato: 4. november 2026.
 | Profile, link, Free-entitlement | Findes. Én aktiv entitlement. Legacy-plan `free`. Hash uændret |
 | Andre brugere | Ingen. `public.users` = 1 og `auth.users` = 1 |
 | Cloud-flag på den gamle app | Ikke sat |
-| Separat pilotapp | DONE. `https://traderdash-next.streamlit.app` på `feature/supabase-auth` |
-| Pilot-password | Sat for den ene Auth-bruger. Ikke gemt i Git. Legacy-hashen er uændret |
+| Separat pilotapp | DONE. `https://traderdash-next.streamlit.app` på `feature/auth-email-recovery` |
+| Pilot-password | Skiftet 4. november 2026 i den gennemførte prøve. Ikke gemt i Git. Legacy-hashen er uændret |
 | Stripe | Ikke aktiv |
 | Restore | Ikke udført |
 

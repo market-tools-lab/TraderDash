@@ -25,6 +25,20 @@ Community Cloud kan ikke skifte Python-version efter deploy uden at appen slette
 
 Nulstilling og skift af adgangskode i UI afviser enhver anden vært end preview. Login, profil, entitlement og logout følger den konfigurerede Production-URL.
 
-Registrering er lukket i Auth-mode. Stripe er ikke aktiv. Mailleverandør er ikke valgt.
+Registrering er lukket i Auth-mode. Stripe er ikke aktiv.
+
+## Nuværende pilot
+
+4. november 2026 blev den første app slettet og oprettet igen, fordi Community Cloud ikke kan skifte branch. Den nuværende app er:
+
+| Felt | Værdi |
+| --- | --- |
+| URL | `https://traderdash-next.streamlit.app` |
+| Branch | `feature/auth-email-recovery` |
+| Entrypoint | `app.py` |
+| Python | 3.14 |
+| Legacy | `traderdash-market` er ikke ændret og peger stadig på `master` |
+
+Nulstillingen er prøvet én gang samme dag. Resend leverede mailen fra `noreply@auth.markettools.app`. Detaljerne står i `AUTH_EMAIL_RECOVERY.md`. Tabellen øverst beskriver den første oprettelse og er ikke den nuværende kilde.
 
 Senere hostingflytning bruger de samme miljønavne. Koden antager ikke, at Community Cloud er den eneste vært, ud over den eksisterende genkendelse af Cloud, som kun bruges af legacy-databasevejen.
