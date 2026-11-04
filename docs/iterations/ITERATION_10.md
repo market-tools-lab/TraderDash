@@ -6,7 +6,7 @@ Status: **MANUAL GATE**. Den separate Streamlit-pilotapp er specificeret og ikke
 
 ## Review
 
-Repository er `market-tools-lab/TraderDash`. `master` og `origin/master` står på `4d292dae4a43c114df8818d4d7991d9b37149736`. De syv auditfiler under `docs/` er u sporede. Auth-koden siden master er committed.
+Repository er `market-tools-lab/TraderDash`. `master` og `origin/master` står på `4d292dae4a43c114df8818d4d7991d9b37149736`. De syv auditfiler under `docs/` er stadig usporede. Auth-koden siden master er committed.
 
 Manglende `TRADERDASH_AUTH_MODE` bliver `legacy`. `supabase_auth` vælges kun ved den værdi. Registrering vises ikke i Auth-mode. Logout fjerner token, user id, e-mail og plan. Entitlement læses, og authenticated kan ikke skrive den. Free er 30, Nordic 79 og International 159. Auth-fejl bliver kort dansk. Preview-URL er ikke default for login. Den bruges kun som afvisning for nulstilling og passwordskift. Ingen Production-testbruger er hardcodet i appen.
 
