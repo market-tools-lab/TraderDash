@@ -2,7 +2,7 @@
 
 Dato: 4. november 2026. Branch: `feature/supabase-auth`.
 
-Status: **MANUAL GATE**. Den separate Streamlit-pilotapp er specificeret og ikke oprettet. Den eksisterende app er ikke ændret.
+Status: **DONE**. Pilotappen er `https://traderdash-next.streamlit.app`. Den kører `feature/supabase-auth` med Supabase Auth mod Production `wxvobyifckbpnqfbnlxl`. Den eksisterende app er uændret.
 
 ## Review
 
@@ -12,7 +12,7 @@ Manglende `TRADERDASH_AUTH_MODE` bliver `legacy`. `supabase_auth` vælges kun ve
 
 Python er 3.12.10 lokalt. Community Cloud bruger 3.12 som standard. `DATABASE_URL` er ikke nødvendig for Auth-login.
 
-## Production, kun læst
+## Production
 
 | Kontrol | Resultat |
 | --- | --- |
@@ -22,8 +22,11 @@ Python er 3.12.10 lokalt. Community Cloud bruger 3.12 som standard. `DATABASE_UR
 | Link | 1, `migrated` |
 | Aktiv Free-entitlement | 1 |
 | Legacy-række | 1, plan `free`, status `free` |
-| Hash | uændret |
+| Legacy-hash | uændret og forskellig fra Auth-hashen |
 | Andre brugere | 0 |
+| Stripe-events | 0 |
+
+Pilotens Auth-password er sat for den ene bruger. Værdien er ikke gemt i Git, dokumentation eller chatten.
 
 ## Tests
 
@@ -31,18 +34,31 @@ Python er 3.12.10 lokalt. Community Cloud bruger 3.12 som standard. `DATABASE_UR
 
 98 tests. 89 bestod, 0 fejlede, 9 sprunget over. Varighed 15,9 sekunder. De 18 tests i `tests/test_account_store.py` er med i de 89.
 
-Den isolerede Production-login er ikke kørt. Pilot-passwordet findes ikke i processen og må ikke skrives i chatten.
+Hostet accepttest på `https://traderdash-next.streamlit.app`:
+
+| Kontrol | Resultat |
+| --- | --- |
+| Auth-login | vist, registrering skjult |
+| Forkert login | "Forkert e-mail eller adgangskode." uden stack trace |
+| Nulstilling | "Nulstilling kan ikke sendes." |
+| Pilot-login | plan Free, profilens e-mail vist |
+| Papirer | 30 |
+| Analyse | åbner for en dansk aktie |
+| International | låst |
+| Selvopgradering | afvist, checkout er ikke aktiveret, planen bliver Free |
+| Password i siden eller browser-lager | nej |
+| Logout og nyt login | består |
+| Privat session | kun Auth-login |
 
 ## Streamlit
 
-Ingen MCP, CLI eller dokumenteret API kan oprette Community Cloud-appen eller lægge secrets ind. Browser-login er ikke brugt. Den gamle app `https://traderdash-market.streamlit.app` er ikke åbnet for ændring.
+Der findes ikke en dokumenteret API til at oprette Community Cloud-appen. Appen er oprettet manuelt som `traderdash-next`. Secrets ligger kun i den nye app. `https://traderdash-market.streamlit.app` viser stadig legacy-login med "Opret konto" og blev ikke konfigureret. Den var i dvale og blev kun vækket.
 
 ## Ikke gjort
 
-- Pilotappen er ikke deployet
-- Secrets er ikke sat
 - Legacy-appen er ikke ændret
-- Production-data er ikke skrevet
+- Legacy-hashen er ikke ændret
+- Andre brugere er ikke migreret
 - Stripe er ikke aktiveret
 - Ingen merge
 - Iteration 11 er ikke startet

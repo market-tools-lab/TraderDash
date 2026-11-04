@@ -2,7 +2,7 @@
 
 Dato: 4. november 2026. Ingen værdier står her.
 
-Pilotappen er en ny Community Cloud-app. Den må ikke genbruge eller ændre secrets på `traderdash-market.streamlit.app`.
+Pilotappen er `https://traderdash-next.streamlit.app`. Den må ikke genbruge eller ændre secrets på `traderdash-market.streamlit.app`. De tre navne nedenfor er sat i den nye app. Værdierne står ikke her.
 
 | Navn | Formål | Kilde |
 | --- | --- | --- |

@@ -13,14 +13,11 @@ Dato: 4. november 2026.
 | Preview | `ajbsoudovxstlolojvte` må ikke være appens Auth-target |
 | Eksisterende app | `https://traderdash-market.streamlit.app` forbliver legacy og må ikke ændres |
 
-Foreslået URL, i rækkefølge hvis navnet er optaget:
+Deployet URL: `https://traderdash-next.streamlit.app`.
 
-1. `https://traderdash-auth-pilot.streamlit.app`
-2. `https://traderdash-auth-test.streamlit.app`
-3. `https://traderdash-login-pilot.streamlit.app`
-4. `https://traderdash-market-auth.streamlit.app`
+De først foreslåede navne var `traderdash-auth-pilot`, `traderdash-auth-test`, `traderdash-login-pilot` og `traderdash-market-auth`. Den oprettede app hedder `traderdash-next`.
 
-Der findes ikke en dokumenteret Community Cloud-API til at oprette appen eller indsætte secrets. Oprettelsen er derfor en manuel gate. Secrets sættes kun i den nye apps Advanced settings og ikke i Git.
+Der findes ikke en dokumenteret Community Cloud-API til at oprette appen eller indsætte secrets. Oprettelsen er gjort manuelt. Secrets ligger kun i den nye apps Advanced settings og ikke i Git.
 
 `requirements.txt` i roden er runtime-listen. Der er ingen separat test-requirementsfil. `psycopg` bliver importeret af appen, men Auth-vejen kalder den ikke, og `DATABASE_URL` sættes ikke.
 
