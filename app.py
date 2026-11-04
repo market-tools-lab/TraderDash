@@ -11,6 +11,7 @@ import streamlit as st
 import access
 import account_page
 import accounts
+import supabase_auth
 from market_data import describe_freshness, get_history, get_quote
 
 TRADING_DAYS = 252
@@ -549,11 +550,34 @@ def _clear_user_session(*, logout: bool) -> None:
         st.session_state.pop(key, None)
     if logout:
         st.session_state.pop("auth_user_id", None)
+        supabase_auth.clear_local(st.session_state)
 
 
 def _logout() -> None:
+    if supabase_auth.auth_mode() == "supabase_auth":
+        supabase_auth.logout(st.session_state)
     st.session_state["_pending_logout"] = True
     st.rerun()
+
+
+def _render_supabase_login() -> None:
+    with st.form("login"):
+        email = st.text_input("E-mail", key="login_email")
+        password = st.text_input("Adgangskode", type="password", key="login_password")
+        submitted = st.form_submit_button("Log ind", type="primary")
+    if submitted:
+        try:
+            session = supabase_auth.sign_in(email, password)
+        except supabase_auth.AuthError as exc:
+            st.error(str(exc))
+        else:
+            if session is None:
+                st.error("Forkert e-mail eller adgangskode.")
+            else:
+                _clear_user_session(logout=False)
+                supabase_auth.remember(session, st.session_state)
+                st.rerun()
+    st.caption("Ny konto oprettes ikke i denne loginvej.")
 
 
 def render_account_gate() -> None:
@@ -609,15 +633,27 @@ for query_key in ("ticker", "symbol", "stock", "code", "user", "user_id", "plan"
 if st.session_state.pop("_pending_logout", False):
     _clear_user_session(logout=True)
 
-try:
-    signed_in = accounts.get_user(str(st.session_state.get("auth_user_id") or ""))
-except accounts.AccountConfigError as exc:
-    st.error(str(exc))
-    st.stop()
-if signed_in is None:
-    _clear_user_session(logout=True)
-    render_account_gate()
-    st.stop()
+if supabase_auth.auth_mode() == "supabase_auth":
+    try:
+        supabase_session = supabase_auth.load_saved_session(st.session_state)
+    except supabase_auth.AuthError as exc:
+        st.error(str(exc))
+        st.stop()
+    if supabase_session is None:
+        _clear_user_session(logout=True)
+        _render_supabase_login()
+        st.stop()
+    signed_in = supabase_session.as_user()
+else:
+    try:
+        signed_in = accounts.get_user(str(st.session_state.get("auth_user_id") or ""))
+    except accounts.AccountConfigError as exc:
+        st.error(str(exc))
+        st.stop()
+    if signed_in is None:
+        _clear_user_session(logout=True)
+        render_account_gate()
+        st.stop()
 
 with st.sidebar:
     st.header("Opslag")
@@ -636,7 +672,13 @@ with st.sidebar:
     risk_free_pct = st.slider("Risikofri rente (%)", min_value=0.0, max_value=8.0, value=2.0, step=0.5)
     risk_free_rate = risk_free_pct / 100
     st.caption("Perioden og renten bruges både på enkeltaktien og i watchlisten.")
-    if accounts.developer_override_enabled():
+    if supabase_auth.auth_mode() == "supabase_auth":
+        plan = signed_in.plan if signed_in.plan in access.PLANS else ""
+        if plan in access.PLANS:
+            st.caption(f"Plan: {access.PLAN_LABELS.get(plan, 'Free')}")
+        else:
+            st.caption("Plan: Ingen adgang")
+    elif accounts.developer_override_enabled():
         if st.session_state.get("dev_plan") not in access.PLANS:
             st.session_state.dev_plan = accounts.resolve_plan(signed_in.plan)
         st.selectbox(
@@ -656,7 +698,18 @@ with st.sidebar:
         _logout()
 
 if st.session_state.get("main_view") == "account":
+    if plan not in access.PLANS:
+        st.header("Konto")
+        st.caption(signed_in.email)
+        st.info("Ingen aktiv TraderDash-adgang.")
+        if st.button("Log ud", key="account_logout_closed"):
+            _logout()
+        st.stop()
     account_page.render_account(signed_in, plan, _logout)
+    st.stop()
+
+if plan not in access.PLANS:
+    st.info("Ingen aktiv TraderDash-adgang.")
     st.stop()
 
 single_tab, watch_tab = st.tabs(["Enkelt Aktie", "Watchlist Overblik"])
