@@ -543,6 +543,26 @@ def build_chart(history: pd.DataFrame, indicator_rsi: pd.Series, indicator_macd:
     return figure
 
 
+_SAFE_AUTH_MESSAGES = {
+    "Supabase Auth er ikke konfigureret.",
+    "Supabase Auth er ikke tilgængelig.",
+    "Nulstilling kan ikke sendes.",
+    "Nulstillingen er ikke gyldig.",
+    "Adgangskoden kunne ikke opdateres.",
+    "Adgangskoderne er ikke ens.",
+    "Adgangskoden skal være mellem 12 og 128 tegn.",
+    "Adgangskoden er for svag.",
+    "Kontoen er ikke klar.",
+}
+
+
+def _auth_notice(exc: supabase_auth.AuthError) -> str:
+    text = str(exc)
+    if text in _SAFE_AUTH_MESSAGES:
+        return text
+    return "Supabase Auth er ikke tilgængelig."
+
+
 def _clear_user_session(*, logout: bool) -> None:
     for key in [key for key in st.session_state if str(key).startswith("selected_symbol")]:
         del st.session_state[key]
@@ -566,17 +586,25 @@ def _render_supabase_login() -> None:
         password = st.text_input("Adgangskode", type="password", key="login_password")
         submitted = st.form_submit_button("Log ind", type="primary")
     if submitted:
+        rejected = False
         try:
             session = supabase_auth.sign_in(email, password)
         except supabase_auth.AuthError as exc:
-            st.error(str(exc))
+            st.error(_auth_notice(exc))
+            rejected = True
+        except Exception:
+            st.error("Supabase Auth er ikke tilgængelig.")
+            rejected = True
         else:
             if session is None:
                 st.error("Forkert e-mail eller adgangskode.")
+                rejected = True
             else:
                 _clear_user_session(logout=False)
                 supabase_auth.remember(session, st.session_state)
                 st.rerun()
+        if rejected:
+            supabase_auth.forget_password(st.session_state)
     st.caption("Ny konto oprettes ikke i denne loginvej.")
     _render_supabase_reset()
 
@@ -589,7 +617,9 @@ def _render_supabase_reset() -> None:
         try:
             supabase_auth.request_password_reset(email, supabase_auth.PREVIEW_ORIGIN)
         except supabase_auth.AuthError as exc:
-            st.error(str(exc))
+            st.error(_auth_notice(exc))
+        except Exception:
+            st.error("Supabase Auth er ikke tilgængelig.")
         else:
             st.info(supabase_auth.RESET_MESSAGE)
         supabase_auth.forget_password(st.session_state)
@@ -608,7 +638,9 @@ def _render_supabase_password_change() -> None:
                 confirmation,
             )
         except supabase_auth.AuthError as exc:
-            st.error(str(exc))
+            st.error(_auth_notice(exc))
+        except Exception:
+            st.error("Supabase Auth er ikke tilgængelig.")
         else:
             supabase_auth.sign_out_all_supported_sessions(st.session_state)
             st.session_state["_pending_logout"] = True
@@ -669,15 +701,31 @@ for query_key in ("ticker", "symbol", "stock", "code", "user", "user_id", "plan"
 if st.session_state.pop("_pending_logout", False):
     _clear_user_session(logout=True)
 
+if supabase_auth.auth_mode() != "supabase_auth" and (
+    st.session_state.get(supabase_auth.TOKEN_KEY) or st.session_state.get(supabase_auth.USER_KEY)
+):
+    supabase_auth.clear_local(st.session_state)
+    supabase_auth.forget_password(st.session_state)
+    st.error("Login-måden er ændret. Log ind igen.")
+    st.stop()
+
 if supabase_auth.auth_mode() == "supabase_auth":
     try:
         supabase_session = supabase_auth.load_saved_session(st.session_state)
     except supabase_auth.AuthError as exc:
-        st.error(str(exc))
+        st.error(_auth_notice(exc))
+        st.stop()
+    except Exception:
+        st.error("Supabase Auth er ikke tilgængelig.")
         st.stop()
     if supabase_session is None:
         _clear_user_session(logout=True)
         _render_supabase_login()
+        st.stop()
+    if supabase_session.profile_id != supabase_session.user_id:
+        st.error("Kontoen er ikke klar.")
+        if st.button("Log ud", key="profile_logout"):
+            _logout()
         st.stop()
     signed_in = supabase_session.as_user()
 else:

@@ -373,8 +373,8 @@ def _urllib_transport(method: str, url: str, headers: Mapping[str, str], body: M
             return response.status, _decode(raw)
     except urllib.error.HTTPError as exc:
         return exc.code, _decode(exc.read())
-    except urllib.error.URLError as exc:
-        raise AuthError("Supabase Auth er ikke tilgængelig.") from exc
+    except (urllib.error.URLError, TimeoutError):
+        raise AuthError("Supabase Auth er ikke tilgængelig.") from None
 
 
 def _decode(raw: bytes):

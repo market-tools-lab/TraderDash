@@ -149,6 +149,7 @@ class EntitlementTranslationTests(unittest.TestCase):
             [_row("free", status="revoked")],
             [_row("nordic", status="suspended")],
             [_row("international", status="expired")],
+            [_row("nordic", status="past_due")],
             [_row("free", ends_at=past)],
             [_row("free", starts_at=future)],
             [_row("free", product="other-product")],

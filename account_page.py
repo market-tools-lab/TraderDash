@@ -12,6 +12,7 @@ import streamlit as st
 
 import accounts
 import plans
+import supabase_auth
 from accounts import User
 
 _LAYOUT = """
@@ -72,7 +73,7 @@ def render_account(user: User, active_plan: str, logout: Callable[[], None]) -> 
     if notice:
         st.info(notice)
 
-    if accounts.developer_override_enabled():
+    if accounts.developer_override_enabled() and supabase_auth.auth_mode() != "supabase_auth":
         with st.expander("Developer details"):
             st.text(f"user_id: {user.user_id}")
             st.text(f"stripe_customer_id: {user.stripe_customer_id or '—'}")
