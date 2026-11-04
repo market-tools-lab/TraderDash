@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import json
 import os
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -155,3 +157,68 @@ class EntitlementTranslationTests(unittest.TestCase):
         for rows in closed:
             self.assertIsNone(supabase_auth.plan_from_entitlements(rows, NOW))
         self.assertFalse(access.may_analyse("NOVO-B.CO", ""))
+
+
+def _jwt(payload: dict) -> str:
+    body = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+    return f"header.{body}.signature"
+
+
+class PreviewConfigTests(unittest.TestCase):
+    def test_preview_source_has_no_historical_user_or_secret(self):
+        source = (ROOT / "tests" / "test_supabase_auth_preview.py").read_text(encoding="utf-8")
+        auth_source = (ROOT / "supabase_auth.py").read_text(encoding="utf-8")
+        self.assertNotIn("32772e00-62a3-4d85-8da6-eeb806cb56c5", source)
+        self.assertNotIn("service_role", auth_source)
+        self.assertNotIn("print(", auth_source)
+        self.assertNotIn("print(", source)
+        self.assertNotIn("supabase.co", auth_source)
+        self.assertNotIn("TRADERDASH_SUPABASE_SERVICE", source)
+
+    def test_missing_preview_configuration_skips_without_a_default_user(self):
+        from tests.test_supabase_auth_preview import REQUIRED, preview_config
+
+        config, reason = preview_config({})
+        self.assertIsNone(config)
+        self.assertIsNotNone(reason)
+        for name in REQUIRED:
+            self.assertIn(name, reason)
+
+    def test_only_the_preview_origin_and_anon_key_are_accepted(self):
+        from tests.test_supabase_auth_preview import PreviewConfigError, preview_config
+
+        anon = _jwt({"role": "anon", "ref": "ajbsoudovxstlolojvte"})
+        base = {
+            "TRADERDASH_SUPABASE_URL": "https://ajbsoudovxstlolojvte.supabase.co",
+            "TRADERDASH_SUPABASE_ANON_KEY": anon,
+            "TRADERDASH_PREVIEW_TEST_EMAIL": "person@example.invalid",
+            "TRADERDASH_PREVIEW_TEST_USER_ID": "user-from-env",
+            "TRADERDASH_PREVIEW_TEST_PASSWORD": "not-stored",
+        }
+        config, reason = preview_config(base)
+        self.assertIsNone(reason)
+        self.assertEqual(config["user_id"], "user-from-env")
+        self.assertNotIn("access_token", config)
+
+        other_host = dict(base, TRADERDASH_SUPABASE_URL="https://example.supabase.co")
+        with self.assertRaises(PreviewConfigError):
+            preview_config(other_host)
+
+        service = dict(base, TRADERDASH_SUPABASE_ANON_KEY=_jwt({"role": "service_role", "ref": "ajbsoudovxstlolojvte"}))
+        with self.assertRaises(PreviewConfigError) as raised:
+            preview_config(service)
+        self.assertNotIn("eyJ", str(raised.exception))
+        self.assertNotIn("service_role", str(raised.exception))
+
+        other_project = dict(base, TRADERDASH_SUPABASE_ANON_KEY=_jwt({"role": "anon", "ref": "other-project"}))
+        with self.assertRaises(PreviewConfigError):
+            preview_config(other_project)
+
+        secret = dict(base, TRADERDASH_SUPABASE_ANON_KEY="sb_secret_not_a_client_key")
+        with self.assertRaises(PreviewConfigError):
+            preview_config(secret)
+
+        publishable = dict(base, TRADERDASH_SUPABASE_ANON_KEY="sb_publishable_example")
+        config, reason = preview_config(publishable)
+        self.assertIsNone(reason)
+        self.assertEqual(config["email"], "person@example.invalid")
