@@ -12,18 +12,18 @@ SHA-256 er taget af filernes bytes. Filnavnets tidsstempel og preview-historikke
 | --- | --- | --- | --- | --- | --- |
 | 0 | `supabase/migrations/20261030160000_accounts.sql` | `5f3118ea88414be5ee600ed6d966d05a5800bb40410a3a8752294c4a4ae87235` | Ingen. Opretter `public.users` | Allerede kørt som `20261030160000` | Forventes allerede. Må ikke køres igen |
 
-Backup-gaten er grøn. Verified 2026-11-04 på Traderdash / `main` / PRODUCTION. Seneste synlige restore-punkt er 2026-11-04 02:58:26 UTC, typen er PHYSICAL, og restore er tilgængelig. Restore er ikke testet og ikke udført. Filene nedenfor køres ikke, før Theis giver et eksplicit GO til den første Production-write.
+Backup-gaten er grøn. Verified 2026-11-04 på Traderdash / `main` / PRODUCTION. Seneste synlige restore-punkt er 2026-11-04 02:58:26 UTC, typen er PHYSICAL, og restore er tilgængelig. Restore er ikke testet og ikke udført. Theis gav 2026-11-04 eksplicit GO til de to filer nedenfor. De er kørt på `wxvobyifckbpnqfbnlxl` og ikke på preview.
 
 ## Fremad, først efter eksplicit GO
 
 | Rækkefølge | Fil | SHA-256 | Afhængighed | Preview | Production |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `supabase/migrations/20261104110000_identity_catalog.sql` | `fdf53d809b5811baf43afe577be9c86e5fe475c5e1fab20b3bacfb6421573951` | `public.users` findes og er urørt. `auth.users` findes | Kørt som `20261104112720` | Ikke kørt |
-| 2 | `supabase/migrations/20261104140000_legacy_auth_links.sql` | `671d8e9e7cd6d6e87b3e668b3b3bf5048a817093f55e07dd75c922f018c3a0c9` | Rækkefølge 1. Ingen ændring af `public.users` | Kørt som `20261104130624` | Ikke kørt |
+| 1 | `supabase/migrations/20261104110000_identity_catalog.sql` | `fdf53d809b5811baf43afe577be9c86e5fe475c5e1fab20b3bacfb6421573951` | `public.users` findes og er urørt. `auth.users` findes | Kørt som `20261104112720` | Kørt som `20261104143544` |
+| 2 | `supabase/migrations/20261104140000_legacy_auth_links.sql` | `671d8e9e7cd6d6e87b3e668b3b3bf5048a817093f55e07dd75c922f018c3a0c9` | Rækkefølge 1. Ingen ændring af `public.users` | Kørt som `20261104130624` | Kørt som `20261104143902` |
 
 Iteration 7 ændrede ikke skemaet. Der er ingen tredje migrationsfil.
 
-Filhovedet i identity catalog siger stadig `NOT APPLIED`. Det er det oprindelige forberedelsesstempel, og den statiske test låser formuleringen. Preview-historikken er sandheden for preview. Production er ikke kørt.
+Filhovedet i identity catalog siger stadig `NOT APPLIED`. Det er det oprindelige forberedelsesstempel, og den statiske test låser formuleringen. Preview-historikken og Production-historikken er sandheden for de to databaser. Production er kørt som `20261104143544` og `20261104143902`.
 
 ## Forventede objekter
 
