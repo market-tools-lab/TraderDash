@@ -2,28 +2,30 @@
 
 Dato: 4. november 2026.
 
-Beslutning i denne blok: **ingen merge**. `master` bliver på `4d292dae4a43c114df8818d4d7991d9b37149736`.
+Kontrolleret merge er udført. Pull request #1 merget `feature/supabase-auth` `8f304de5eb3baebef5f5048570c27d65b7995a4d` til `master` som `0e1f7b4a43125af36431bab82f95d848bfc882e6` den 4. november 2026 kl. 18:28 UTC. Strategien er en almindelig merge-commit. Den tidligere `master` var `4d292dae4a43c114df8818d4d7991d9b37149736`. `feature/supabase-auth` er beholdt.
 
-## Hvorfor koden kan merges senere uden at skifte legacy-appen
+Release-gate på pull requesten var grøn: 117 tests, 0 fejl, 9 sprunget over, Python 3.12, ingen Production-secrets. Workflowet lytter på pull requests mod `master` og push til `feature/**`. Selve merge-committen starter derfor ikke et nyt Actions-kørsel. Træet er identisk med den godkendte kandidat.
 
-Manglende eller ukendt `TRADERDASH_AUTH_MODE` bliver `legacy`. Legacy-appens secrets bruger ikke det navn. En merge alene tænder ikke Supabase Auth på `https://traderdash-market.streamlit.app`.
+## Produktion efter mergen
 
-Piloten peger på `feature/supabase-auth`. Den følger ikke `master`, før dens branch ændres.
+Manglende eller ukendt `TRADERDASH_AUTH_MODE` bliver `legacy`. Legacy-appens secrets er ikke ændret. Mergen tænder ikke Supabase Auth på `https://traderdash-market.streamlit.app`.
 
-## Åbne punkter før mergen besluttes
+Piloten peger stadig på `feature/supabase-auth`. Den følger ikke `master`, før dens branch ændres.
 
-| Punkt | Status |
+Registrering er lukket i Auth-mode. Stripe-flaget er false. Der er ingen sletteknap.
+
+Mergen kopierede kode. Den kørte ikke SQL, skiftede ikke Cloud-secrets og flyttede ikke DNS. Migrationerne `accounts`, `identity_catalog` og `legacy_auth_links` var allerede anvendt og må ikke køres igen. Filkommentaren `NOT APPLIED` i identitetskataloget er låst af testen. Driftshistorikken er kilden.
+
+## Stadig uden for mergen
+
+| Punkt | Klasse |
 | --- | --- |
-| Fuld testsuite | CI kører `python -m unittest discover -s tests` på Python 3.12 uden secrets |
-| Registrering | Lukket i Auth-mode. Skal forblive lukket |
-| Stripe | Flag false. Ingen live-nøgle |
-| Mailleverandør | Ikke valgt. Det blokerer ikke en kodemerge |
-| Sletning | Kun lokal. Ingen knap. Det blokerer ikke en kodemerge |
-| Restore | Ikke udført. Det blokerer ikke en kodemerge |
-| Vært | Community Cloud. Image er ikke deployet |
+| Mailleverandør og levering af nulstilling | Offentlig lancering |
+| Restore-øvelse | Offentlig lancering |
+| Produktionsklar kontosletning | Offentlig lancering |
+| Beslutning om åben registrering | Offentlig lancering |
+| Stripe Live, produkter, checkout og webhook | Betalt lancering |
+| Container-vært, overvågning og backup-procedure | Drift |
 | Historiske auditfiler | Ignoreret. Ikke en del af mergen |
-| CI | `.github/workflows/release-gate.yml` |
 
-En merge kopierer kode. Den kører ikke SQL, skifter ikke Cloud-secrets og flytter ikke DNS. Migrationerne er allerede anvendt på Production og må ikke køres igen. Filkommentaren `NOT APPLIED` i identitetskataloget er låst af testen. Driftshistorikken er kilden.
-
-Rollback efter en senere merge er at flytte `master` tilbage til `4d292da` og lade legacy-appens secrets være. Production-schema og pilotbrugeren rulles ikke tilbage af en Git-merge.
+Rollback af Git-mergen er at flytte `master` tilbage til `4d292da` og lade legacy-appens secrets være. Production-schema og pilotbrugeren rulles ikke tilbage af Git. Der køres ikke omvendt SQL af den grund.
