@@ -4,7 +4,9 @@ Dato: 4. november 2026. Branch: `feature/supabase-auth`.
 
 Status: **BLOCKED**.
 
-Årsag: der findes ingen lokal container-runtime. Docker blev ikke installeret. Ingen lokal Supabase-stack blev startet, og migrationen blev ikke anvendt. Production blev ikke kontaktet.
+Årsag, andet forsøg samme dag: MCP-forbindelsen peger på preview-projektet `ajbsoudovxstlolojvte`, som er manuelt verificeret som branchen `supabase-auth-test`. `CREATE TABLE` blev afvist med `cannot execute CREATE TABLE in a read-only transaction`. Værktøjet `apply_migration` er ikke tilgængeligt. Migrationen er ikke anvendt. `products` og `plans` findes ikke. Production blev ikke kontaktet.
+
+Første forsøg samme dag var blokeret, fordi der ikke findes en lokal container-runtime. Docker blev ikke installeret.
 
 ## Prerequisites
 
