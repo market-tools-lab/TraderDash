@@ -2,67 +2,85 @@
 
 Dato: 4. november 2026. Branch: `feature/supabase-auth`.
 
-Status: **BLOCKED**.
+Status: **DONE**.
 
-Årsag, andet forsøg samme dag: MCP-forbindelsen peger på preview-projektet `ajbsoudovxstlolojvte`, som er manuelt verificeret som branchen `supabase-auth-test`. `CREATE TABLE` blev afvist med `cannot execute CREATE TABLE in a read-only transaction`. Værktøjet `apply_migration` er ikke tilgængeligt. Migrationen er ikke anvendt. `products` og `plans` findes ikke. Production blev ikke kontaktet.
+Schemaet er anvendt på preview-branchen `supabase-auth-test`, project ref `ajbsoudovxstlolojvte`. Production er ikke kontaktet. Login og `public.users` er ikke ændret.
 
-Første forsøg samme dag var blokeret, fordi der ikke findes en lokal container-runtime. Docker blev ikke installeret.
+To tidligere forsøg samme dag var blokeret: først manglede en lokal container-runtime, derefter afviste MCP-forbindelsen DDL som read-only. Tredje forsøg brugte `apply_migration` mod det verificerede preview-ref.
 
-## Prerequisites
+## Target
 
 | Kontrol | Resultat |
 | --- | --- |
-| Aktiv branch | `feature/supabase-auth` |
-| `master` | `4d292dae4a43c114df8818d4d7991d9b37149736`, uændret |
-| Iteration 0-commits | `140d7fd`, `e31b856`, `09d8796` |
-| Sporbar working tree | Ren. De syv untracked auditfiler under `docs/` blev ikke staged |
-| Docker | `docker` findes ikke på PATH og ikke under `C:\Program Files\Docker`. Winget har ingen installeret Docker-pakke |
-| Docker-daemon | Ikke tilgængelig |
-| WSL | Ikke installeret |
-| Node.js | Findes ikke på PATH og ikke under `C:\Program Files\nodejs` |
-| npm | Findes ikke |
-| Supabase CLI | Findes ikke på PATH. Ingen `package.json`, så der er ingen lokal dev dependency |
-| `supabase/config.toml` | Findes allerede med `project_id = "traderdash"`. Der blev ikke kørt `supabase init` |
+| Project ref | `ajbsoudovxstlolojvte` |
+| Branch | `supabase-auth-test`, manuelt verificeret som preview |
+| URL før skrivning | `https://ajbsoudovxstlolojvte.supabase.co` |
 | `supabase link` | Ikke kørt |
-| `supabase start` | Ikke kørt |
-| `supabase db reset` | Ikke kørt |
 | `supabase db push` | Ikke kørt |
-
-## Lokal stack
-
-Ingen. Der er ingen service-URL'er.
-
-Stacken stoppes ikke, fordi den aldrig blev startet.
+| Production | Ikke kontaktet |
 
 ## Migration
 
-`supabase/migrations/20261104110000_identity_catalog.sql` er uændret og stadig **PREPARED, NOT APPLIED**.
+`apply_migration` anvendte indholdet af `supabase/migrations/20261104110000_identity_catalog.sql`.
 
-Den eksisterende `supabase/migrations/20261030160000_accounts.sql` er uændret.
+Preview-historikken har version `20261104112720` og navnet `identity_catalog`. Filnavnets tidsstempel er uændret. `apply_migration` sætter sit eget versionstidsstempel.
 
-## Tests
+Den eksisterende migration `20261030160000` `accounts` lå der i forvejen og blev ikke ændret. Migrationsfilen i repoet er ikke rettet. Der var ingen schemafejl.
 
-Integrationstestene blev ikke kørt, fordi de kræver den lokale stack.
+## Preview-tests
 
-`python -m unittest tests.test_account_store` blev ikke kørt igen i denne iteration. Seneste kendte resultat er fra Iteration 0: 18 bestået, 0 fejlet, 0 sprunget over.
+Alle punkter bestod. Testdata blev oprettet i en transaktion og rullet tilbage.
 
-## Rettelser
+| Kontrol | Resultat |
+| --- | --- |
+| `products`, `plans`, `profiles`, `entitlements` | Findes |
+| Produkt `traderdash` | Findes |
+| Planer `free`, `nordic`, `international` | Findes |
+| RLS og FORCE ROW LEVEL SECURITY | Aktive på alle fire tabeller |
+| `anon` læser profiler eller entitlements | Afvist |
+| `authenticated` læser profiler | Kun egen række |
+| `authenticated` ændrer `display_name` | Tilladt |
+| `authenticated` ændrer profil-id | Afvist |
+| `authenticated` læser entitlements | Kun egne |
+| `authenticated` opretter, ændrer eller sletter entitlements | Afvist |
+| `authenticated` ændrer `products` eller `plans` | Afvist |
+| Plan fra et andet produkt | Afvist |
+| Anden aktiv entitlement for samme bruger og produkt | Afvist |
+| Syntetisk Auth-bruger | Profil oprettet af triggeren |
+| Automatisk entitlement | Ingen |
 
-Ingen. Migrationsfilen er ikke ændret.
+Efter rollback: 0 profiler, 0 entitlements, 0 syntetiske Auth-brugere. Kataloget er stadig `traderdash` med `free`, `nordic` og `international`.
 
-## Ikke kontaktet
+Der blev brugt reserverede testadresser på `.invalid`. Ingen rigtige adresser.
 
-- Supabase Cloud
-- Production-databasen
-- Production Auth
+## Lokale tests
+
+Python 3.12.10.
+
+`python -m unittest tests.test_account_store tests.test_identity_schema`
+
+| | |
+| --- | --- |
+| Antal | 37 |
+| Bestået | 30 |
+| Fejlet | 0 |
+| Sprunget over | 7 |
+| Warnings | Ingen |
+| Tid | 11,756 s |
+
+De 18 kontotests bestod. De 12 statiske schemafiler bestod. De 7 sprunget over er de gamle pladsholdere, som ikke må åbne en database. De samme tilfælde blev kørt direkte på preview-branchen og bestod dér.
+
+## Ikke ændret
+
+- Production-databasen og Production Auth
+- `postgres`-rollen
 - Streamlit og Streamlit Secrets
 - GitHub
-- Proton Pass
-
-`postgres`-rollen er ikke ændret. Der er ikke oprettet brugere. Der er ikke læst secret-værdier.
+- `app.py` og den eksisterende login
+- `public.users`
 
 ## Rollback
 
-Slet branchen `feature/supabase-auth`. `master` er urørt. Der er ingen lokal database at rydde op.
+Slet branchen `feature/supabase-auth`, hvis repo-ændringen skal væk. `master` er urørt.
 
-Næste forsøg på Iteration 1 kan starte, når Docker Desktop eller en kompatibel container-runtime er installeret og kører, og når Node.js og npm findes, så Supabase CLI kan installeres som lokal dev dependency. Docker må ikke installeres som en del af dette forsøg.
+Preview-schemaet bliver liggende. Syntetiske brugere og testdata er allerede fjernet. Et senere rollback af schemaet skal kun droppe de nye objekter og må ikke droppe `public.users`.
