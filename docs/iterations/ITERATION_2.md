@@ -2,47 +2,94 @@
 
 Dato: 4. november 2026. Branch: `feature/supabase-auth`.
 
-Status: **BLOCKED**.
+Status: **DONE**.
 
-Auth-login er ikke bevist. Der er ikke oprettet en testbruger, og der er ikke kørt et login-script.
+Auth-login er bevist på preview-branchen. `app.py` og det eksisterende login er ikke ændret.
 
 ## Target
 
 | Kontrol | Resultat |
 | --- | --- |
 | Project ref | `ajbsoudovxstlolojvte` |
-| Branch | `supabase-auth-test`, manuelt verificeret som preview |
+| Branch | `supabase-auth-test` |
 | URL | `https://ajbsoudovxstlolojvte.supabase.co` |
-| `products`, `plans`, `profiles`, `entitlements` | Findes |
-| Auth-brugere | 0 |
-| Ikke-syntetiske Auth-brugere | 0 |
-| Rækker i `public.users` | 0 |
-| Profiler | 0 |
-| Entitlements | 0 |
+| Production | Ikke kontaktet |
 
-Miljøet indeholder ikke Production-brugerdata.
+## Bruger og profil
 
-## Blokering
+Testbrugeren blev oprettet manuelt i Supabase-dashboardet. Passwordet er ikke skrevet i repoet og står ikke her.
 
-MCP-forbindelsen har ikke et værktøj til at oprette en Auth-bruger. De tilgængelige databaseværktøjer kan køre SQL og migrationer, men ikke Auth Admin API.
+| Kontrol | Resultat |
+| --- | --- |
+| E-mail | `markettools-auth-test@example.invalid` |
+| Auth-id | `32772e00-62a3-4d85-8da6-eeb806cb56c5` |
+| Profil | Præcis én. `profiles.id` er det samme UUID |
+| Entitlement før tildeling | Ingen |
+| `public.users` | 0 rækker, uændret |
 
-`auth.users` er ikke ændret med SQL. Der er ikke oprettet et password, og der er ikke kaldt en signup-endpoint.
+Profiltriggeren virkede. Den tildelte ikke selv en entitlement.
 
-## Ikke udført
+## Auth-login
 
-- Syntetisk bruger `markettools-auth-test@example.invalid`
-- Login med rigtigt og forkert password
-- Profiltrigger på en blivende bruger
-- Privilegeret Free-entitlement
-- Negative adgangstests
-- Ændring af `app.py`, legacy-login, `public.users`, Streamlit eller Production
+Login blev kørt lokalt mod preview Auth. Nøglen og passwordet lå kun i processens miljø og er slettet igen.
+
+| Test | Resultat |
+| --- | --- |
+| Korrekt login | Session oprettet |
+| Sessionens user.id | Matcher Auth-id |
+| Forkert password | Afvist |
+| Ukendt bruger | Afvist |
+| Egen profil | Læst, og kun den række |
+| Oprette entitlement | Afvist, HTTP 403 |
+| Ændre entitlement | Afvist, HTTP 403 |
+| Slette entitlement | Afvist, HTTP 403 |
+| Aktive products og plans | Læst: `traderdash`, `free`, `nordic`, `international` |
+
+## Free-entitlement
+
+En privilegeret preview-operation indsatte én række: produkt `traderdash`, plan `free`, status `active`, kilde `manual`. Brugeren kunne ikke gøre det selv.
+
+Brugerens egen session læste derefter rækken som `traderdash` / `free` / `active`.
+
+`universes.stocks_for("free")` returnerer 30 papirer. `universes.py` er ikke ændret. TraderDash-UI bruger endnu ikke entitlements. Den læser stadig den gamle plan.
+
+## Negative tests
+
+Før tildelingen havde brugeren ingen entitlement. Det er lukket: 0 papirer.
+
+Disse tilstande blev sat på preview-rækken og rullet tilbage:
+
+| Tilstand | Database | Adgang |
+| --- | --- | --- |
+| Manglende række | 0 rækker | Lukket |
+| `revoked` | Rækken kan sættes sådan | Lukket |
+| `suspended` | Rækken kan sættes sådan | Lukket |
+| `expired` | Rækken kan sættes sådan | Lukket |
+| `active` med `ends_at` i fortiden | Vinduet kan ligge i fortiden, når det stadig er efter `starts_at` | Lukket |
+
+Et forsøg på at sætte `ends_at` før `starts_at` blev afvist af `entitlements_window`. Efter rollback er rækken igen `active`, uden slutdato, plan `free`.
+
+Reglen ligger i `tests/test_entitlement_access.py`. Den er ikke koblet på `app.py`.
 
 ## Regression
 
-Ikke kørt i dette forsøg, fordi iterationen stoppede før ny testkode.
+`python -m unittest tests.test_account_store tests.test_identity_schema tests.test_entitlement_access`
+
+41 tests. 34 bestod, 0 fejlede, 7 sprunget over. De 18 kontotests bestod. De 7 sprunget over er de gamle database-pladsholdere.
+
+## Stadig ikke integreret
+
+- `app.py` og legacy-login
+- `public.users`
+- Streamlit
+- Password reset, e-mail-verifikation og Stripe
+- UI læser ikke entitlements
+
+## Testdata der bliver stående
+
+- Auth-brugeren ovenfor
+- Én aktiv Free-entitlement på `traderdash`
 
 ## Rollback
 
-Ingen Auth-bruger er oprettet. Preview-schemaet fra Iteration 1 er uændret. `master` er urørt.
-
-Næste forsøg kan starte, når preview-miljøet kan oprette en Auth-bruger gennem Auth Admin API uden at skrive direkte i `auth.users`, og uden at password eller nøgler lægges i Git.
+Slet Auth-brugeren på preview-branchen. Profil og entitlement følger med via cascade. `public.users` og Production berøres ikke. `master` er urørt.
