@@ -48,17 +48,20 @@ Den ene rettelse er i `pilot_migration.py`. Et link uden entitlement skriver kun
 
 ## Backup-gate
 
-Verificeret 2026-11-03: Free Plan havde ingen project backups. Theis oplyser, at Pro er aktiveret, og at dashboardet viser daily backups i 7 dage som planfeature. Supabase-dokumentationen siger det samme for Pro: Database → Backups, seneste 7 dages daglige backups. [Database Backups](https://supabase.com/docs/guides/platform/backups).
+| Felt | Værdi |
+| --- | --- |
+| Production backup verified | YES |
+| Verified | 2026-11-04 |
+| Miljø | Traderdash, `main`, PRODUCTION |
+| Latest visible restore point | 2026-11-04 02:58:26 UTC |
+| Type | PHYSICAL |
+| Restore-mulighed | tilgængelig |
+| Restore tested | NO |
+| Restore executed | NO |
 
-Denne session kan ikke bekræfte Production-backuppen. Forbindelsen her er preview-projektet, og en management-token er en ny secret. Ingen restore er udført.
+Theis verificerede det i Supabase Dashboard under Database → Backups. Der er også ældre fysiske restore-punkter fra 2026-11-03, 2026-11-02, 2026-11-01, 2026-10-31 og 2026-10-30. Ingen restore er udført. Preview `supabase-auth-test` er ikke restore-målet.
 
-Manuel kontrol, før nogen senere migration:
-
-1. Åbn Production-projektet. Ref skal være en anden end `ajbsoudovxstlolojvte`. Er den den samme, stop.
-2. Gå til Database → Backups → Scheduled. Stien er `https://supabase.com/dashboard/project/<PRODUCTION_REF>/database/backups/scheduled`.
-3. Seneste backup skal være completed, og tidspunktet skal skrives ned. Det skal være nyere end sidste ændring af testkontoen, eller alderen skal accepteres skriftligt.
-4. Tryk ikke på restore. Restore gør projektet utilgængeligt, og preview-branchen er ikke restore-målet.
-5. Preview `supabase-auth-test` bruges ikke som backupkilde.
+Free Plan havde ingen project backups den 2026-11-03. Det er afløst af denne verificering.
 
 ## Pilotbruger
 
@@ -92,8 +95,8 @@ Streamlit skrev `missing ScriptRunContext` under AppTest. Biblioteket siger, at 
 | Pakken er klar og hashet | GO |
 | Preview matcher kataloget og har ingen rigtige brugere | GO |
 | Rollback er skrevet og ikke kørt | GO |
-| Production-backup er set i denne session | NO-GO |
+| Production-backup | GO. Verified 2026-11-04. Seneste restore-punkt 2026-11-04 02:58:26 UTC. Restore er ikke testet og ikke udført |
 | Production-migration | NO-GO |
 | Første rigtige pilot | NO-GO |
 | Cloud-flag | NO-GO |
-| Samlet | NO-GO for at udføre piloten. GO for at lade pakken ligge, indtil backup-gaten er krydset af |
+| Samlet | Iteration 8 er DONE. Backup-gaten er grøn. NO-GO for den første Production-write, indtil Theis giver et eksplicit GO |

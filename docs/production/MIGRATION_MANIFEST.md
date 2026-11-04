@@ -12,7 +12,9 @@ SHA-256 er taget af filernes bytes. Filnavnets tidsstempel og preview-historikke
 | --- | --- | --- | --- | --- | --- |
 | 0 | `supabase/migrations/20261030160000_accounts.sql` | `5f3118ea88414be5ee600ed6d966d05a5800bb40410a3a8752294c4a4ae87235` | Ingen. Opretter `public.users` | Allerede kørt som `20261030160000` | Forventes allerede. Må ikke køres igen |
 
-## Fremad, når backup-gaten er grøn
+Backup-gaten er grøn. Verified 2026-11-04 på Traderdash / `main` / PRODUCTION. Seneste synlige restore-punkt er 2026-11-04 02:58:26 UTC, typen er PHYSICAL, og restore er tilgængelig. Restore er ikke testet og ikke udført. Filene nedenfor køres ikke, før Theis giver et eksplicit GO til den første Production-write.
+
+## Fremad, først efter eksplicit GO
 
 | Rækkefølge | Fil | SHA-256 | Afhængighed | Preview | Production |
 | --- | --- | --- | --- | --- | --- |
