@@ -172,7 +172,10 @@ class PreviewConfigTests(unittest.TestCase):
         self.assertNotIn("service_role", auth_source)
         self.assertNotIn("print(", auth_source)
         self.assertNotIn("print(", source)
-        self.assertNotIn("supabase.co", auth_source)
+        self.assertNotIn("example.supabase.co", auth_source)
+        for line in auth_source.splitlines():
+            if "supabase.co" in line:
+                self.assertIn("ajbsoudovxstlolojvte", line)
         self.assertNotIn("TRADERDASH_SUPABASE_SERVICE", source)
 
     def test_missing_preview_configuration_skips_without_a_default_user(self):

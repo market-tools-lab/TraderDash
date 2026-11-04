@@ -578,6 +578,42 @@ def _render_supabase_login() -> None:
                 supabase_auth.remember(session, st.session_state)
                 st.rerun()
     st.caption("Ny konto oprettes ikke i denne loginvej.")
+    _render_supabase_reset()
+
+
+def _render_supabase_reset() -> None:
+    with st.form("reset"):
+        email = st.text_input("E-mail til nulstilling", key="reset_email")
+        submitted = st.form_submit_button("Send nulstillingslink")
+    if submitted:
+        try:
+            supabase_auth.request_password_reset(email, supabase_auth.PREVIEW_ORIGIN)
+        except supabase_auth.AuthError as exc:
+            st.error(str(exc))
+        else:
+            st.info(supabase_auth.RESET_MESSAGE)
+        supabase_auth.forget_password(st.session_state)
+
+
+def _render_supabase_password_change() -> None:
+    with st.form("change_password"):
+        new_password = st.text_input("Ny adgangskode", type="password", key="next_password")
+        confirmation = st.text_input("Gentag ny adgangskode", type="password", key="next_confirmation")
+        submitted = st.form_submit_button("Skift adgangskode")
+    if submitted:
+        try:
+            supabase_auth.change_password(
+                str(st.session_state.get(supabase_auth.TOKEN_KEY) or ""),
+                new_password,
+                confirmation,
+            )
+        except supabase_auth.AuthError as exc:
+            st.error(str(exc))
+        else:
+            supabase_auth.sign_out_all_supported_sessions(st.session_state)
+            st.session_state["_pending_logout"] = True
+            st.rerun()
+        supabase_auth.forget_password(st.session_state)
 
 
 def render_account_gate() -> None:
@@ -698,6 +734,8 @@ with st.sidebar:
         _logout()
 
 if st.session_state.get("main_view") == "account":
+    if supabase_auth.auth_mode() == "supabase_auth":
+        _render_supabase_password_change()
     if plan not in access.PLANS:
         st.header("Konto")
         st.caption(signed_in.email)
