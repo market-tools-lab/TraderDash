@@ -1,8 +1,8 @@
 # Repository-inventar
 
-Dato: 4. november 2026. Branch: `feature/supabase-auth`.
+Dato: 4. november 2026.
 
-Repositoriet er den versionerede tekniske dokumentation. Hemmelige værdier ligger ikke her. `.streamlit/secrets.toml`, `.env` og `data/` er ignoreret.
+Repositoriet er den versionerede tekniske dokumentation. Hemmelige værdier ligger ikke her. `.streamlit/secrets.toml`, `.env` og `data/` er ignoreret. Ingen mailudbyder er valgt, og ingen SMTP-hemmelighed ligger her.
 
 ## Kørsel
 
@@ -28,6 +28,9 @@ Repositoriet er den versionerede tekniske dokumentation. Hemmelige værdier ligg
 | `docs/production/STAGING.md` | Miljøer |
 | `docs/production/HOSTING.md` | Senere vært, uden DNS-skift |
 | `docs/production/ROLLBACK.sql` | Ikke til kørsel |
+| `docs/production/AUTH_EMAIL_RECOVERY.md` | Nulstilling. Levering er slået fra |
+| `docs/production/MAIL_PROVIDER_DECISION.md` | Udbydervalg. Ingen konto er oprettet |
+| `docs/production/email/` | Kladde-skabeloner. Ikke udsendt |
 
 ## Uden for mergen
 

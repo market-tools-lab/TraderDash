@@ -14,7 +14,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Mapping, MutableMapping
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -32,9 +32,29 @@ PASSWORD_KEYS = (
     "register_confirmation",
     "next_password",
     "next_confirmation",
+    "recovery_password",
+    "recovery_confirmation",
 )
 PREVIEW_ORIGIN = "https://ajbsoudovxstlolojvte.supabase.co"
-RESET_MESSAGE = "Hvis adressen kan bruges, er et nulstillingslink sendt."
+RESET_MESSAGE = "Hvis der er en konto til e-mailadressen, sender vi en vejledning."
+RECOVERY_DONE = "Adgangskoden er opdateret. Log ind igen."
+INVALID_EMAIL = "Angiv en gyldig e-mailadresse."
+RESET_UNAVAILABLE = "Nulstilling kan ikke sendes."
+RESET_INVALID = "Nulstillingen er ikke gyldig."
+RESET_COOLDOWN = "Vent et øjeblik, før du beder om et nyt link."
+RECOVERY_TOKEN_KEY = "supabase_recovery_token"
+RESET_AFTER_KEY = "supabase_reset_not_before"
+RECOVERY_QUERY_KEYS = (
+    "token_hash",
+    "type",
+    "ref",
+    "code",
+    "access_token",
+    "refresh_token",
+    "token",
+    "next",
+)
+COOLDOWN_SECONDS = 60
 
 
 class AuthError(Exception):
@@ -110,9 +130,62 @@ def logout(state: MutableMapping[str, Any], *, transport=None) -> None:
         return
 
 
-def request_password_reset(email: str, redirect_url: str, *, transport=None) -> bool:
+def recovery_requested() -> bool:
+    """True only when an operator has explicitly enabled password recovery."""
+    return os.environ.get("TRADERDASH_PASSWORD_RECOVERY", "").strip().lower() == "enabled"
+
+
+def email_delivery_configured() -> bool:
+    """True only when an operator asserts that Supabase SMTP is deliberately configured."""
+    return os.environ.get("TRADERDASH_AUTH_EMAIL_DELIVERY", "").strip().lower() == "configured"
+
+
+def delivery_enabled() -> bool:
+    """Recovery may contact Auth only when both explicit switches are on."""
+    return recovery_requested() and email_delivery_configured()
+
+
+def project_ref() -> str:
+    """Project ref from TRADERDASH_SUPABASE_URL. Empty when the URL is not a Supabase host."""
+    host = (urlsplit(os.environ.get("TRADERDASH_SUPABASE_URL", "").strip()).hostname or "").lower()
+    if not host.endswith(".supabase.co"):
+        return ""
+    ref = host.split(".")[0]
+    return ref if ref else ""
+
+
+def email_acceptable(email: str) -> bool:
+    """A format check. It does not ask Auth whether the address exists."""
+    text = str(email or "").strip()
+    if not text or any(character.isspace() for character in text):
+        return False
+    if text.count("@") != 1 or any(character in text for character in "<>\"'"):
+        return False
+    local, domain = text.split("@")
+    return bool(local and domain and "." in domain and ".." not in domain)
+
+
+def request_password_reset(
+    email: str,
+    redirect_url: str,
+    *,
+    transport=None,
+    state: MutableMapping[str, Any] | None = None,
+    now: datetime | None = None,
+) -> bool:
     """Ask Auth to send a reset. The result does not reveal whether the address exists."""
+    if not email_acceptable(email):
+        raise AuthError(INVALID_EMAIL)
+    if not delivery_enabled():
+        raise AuthError(RESET_UNAVAILABLE)
+    if not allowed_redirect(redirect_url):
+        raise AuthError(RESET_UNAVAILABLE)
+    moment = now or datetime.now(timezone.utc)
+    if state is not None and _cooldown_active(state, moment):
+        raise AuthError(RESET_COOLDOWN)
     Client.from_env(transport).request_password_reset(email, redirect_url)
+    if state is not None:
+        state[RESET_AFTER_KEY] = (moment + timedelta(seconds=COOLDOWN_SECONDS)).isoformat()
     return True
 
 
@@ -152,17 +225,122 @@ def sign_out_all_supported_sessions(state: MutableMapping[str, Any], *, transpor
 
 
 def allowed_redirect(url: str) -> bool:
-    """Accept only the preview origin. There is no production fallback."""
-    parsed = urlsplit(str(url or "").strip())
-    return (
-        parsed.scheme == "https"
-        and parsed.hostname == "ajbsoudovxstlolojvte.supabase.co"
+    """Accept an exact allowlisted URL. A user-supplied address is never added."""
+    candidate = str(url or "").strip()
+    if not candidate or not _redirect_structure_is_safe(candidate):
+        return False
+    return candidate in _redirect_allowlist()
+
+
+def configured_redirect() -> str:
+    """The one redirect this process may send. Missing or unsafe configuration fails closed."""
+    candidate = os.environ.get("TRADERDASH_AUTH_REDIRECT_URL", "").strip()
+    if not allowed_redirect(candidate):
+        raise AuthError(RESET_UNAVAILABLE)
+    return candidate
+
+
+def recovery_link_present(params: Mapping[str, Any]) -> bool:
+    """True when the page URL carries a recovery secret that must be handled or discarded."""
+    return any(str(params.get(key) or "").strip() for key in ("token_hash", "code", "access_token", "refresh_token"))
+
+
+def take_recovery_token(params: Mapping[str, Any]) -> str:
+    """Return a recovery token hash, or raise when the link cannot be used."""
+    token = str(params.get("token_hash") or "").strip()
+    kind = str(params.get("type") or "").strip().lower()
+    ref = str(params.get("ref") or "").strip()
+    implicit = any(str(params.get(key) or "").strip() for key in ("code", "access_token", "refresh_token"))
+    if ref and ref != project_ref():
+        raise AuthError(RESET_INVALID)
+    if not delivery_enabled():
+        if token or implicit:
+            raise AuthError(RESET_INVALID)
+        return ""
+    if implicit and not (token and kind == "recovery"):
+        raise AuthError(RESET_INVALID)
+    if token and kind != "recovery":
+        raise AuthError(RESET_INVALID)
+    if token and kind == "recovery":
+        return token
+    return ""
+
+
+def discard_recovery_query(params: MutableMapping[str, Any]) -> None:
+    """Drop recovery material from the page URL. The values are not recorded."""
+    for key in RECOVERY_QUERY_KEYS:
+        if key in params:
+            del params[key]
+
+
+def clear_recovery(state: MutableMapping[str, Any]) -> None:
+    """Remove the recovery token, the cooldown, and any password fields."""
+    state.pop(RECOVERY_TOKEN_KEY, None)
+    state.pop(RESET_AFTER_KEY, None)
+    forget_password(state)
+
+
+def complete_recovery(
+    token_hash: str,
+    new_password: str,
+    confirmation: str,
+    *,
+    transport=None,
+    state: MutableMapping[str, Any] | None = None,
+) -> None:
+    """Set a password from a recovery link, end that session, and keep no token."""
+    if not password_policy.matches(new_password, confirmation):
+        raise AuthError("Adgangskoderne er ikke ens.")
+    try:
+        password_policy.require(new_password)
+    except password_policy.PasswordRejected as exc:
+        raise AuthError(str(exc)) from None
+    if not delivery_enabled() or not str(token_hash or "").strip():
+        raise AuthError(RESET_INVALID)
+    client = Client.from_env(transport)
+    access_token = client.exchange_recovery(token_hash)
+    try:
+        client.update_password_from_recovery(access_token, new_password)
+    finally:
+        try:
+            client.logout(access_token)
+        except AuthError:
+            pass
+        if state is not None:
+            clear_recovery(state)
+
+
+def _redirect_allowlist() -> list[str]:
+    raw = os.environ.get("TRADERDASH_AUTH_REDIRECT_ALLOWLIST", "")
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _redirect_structure_is_safe(url: str) -> bool:
+    parsed = urlsplit(url.strip())
+    host = (parsed.hostname or "").lower()
+    local = host in {"localhost", "127.0.0.1"}
+    scheme_ok = parsed.scheme == "https" or (parsed.scheme == "http" and local)
+    return bool(
+        scheme_ok
+        and host
         and not parsed.username
         and not parsed.password
         and not parsed.query
         and not parsed.fragment
-        and parsed.port in {None, 443}
     )
+
+
+def _cooldown_active(state: Mapping[str, Any], now: datetime) -> bool:
+    raw = str(state.get(RESET_AFTER_KEY) or "")
+    if not raw:
+        return False
+    try:
+        deadline = datetime.fromisoformat(raw)
+    except ValueError:
+        return False
+    if deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=timezone.utc)
+    return deadline > now
 
 
 class AuthSession:
@@ -250,9 +428,8 @@ class Client:
         self._request("POST", "/auth/v1/logout?scope=global", token=token)
 
     def request_password_reset(self, email: str, redirect_url: str) -> None:
-        self._require_preview()
-        if not allowed_redirect(redirect_url):
-            raise AuthError("Nulstilling kan ikke sendes.")
+        if not delivery_enabled() or not allowed_redirect(redirect_url):
+            raise AuthError(RESET_UNAVAILABLE)
         quoted = urllib.parse.quote(redirect_url, safe="")
         status, _body = self._request(
             "POST",
@@ -261,6 +438,39 @@ class Client:
         )
         if status >= 500:
             raise AuthError("Supabase Auth er ikke tilgængelig.")
+        if status == 429:
+            raise AuthError(RESET_UNAVAILABLE)
+
+    def exchange_recovery(self, token_hash: str) -> str:
+        """Exchange a recovery token hash for an access token. The refresh token is discarded."""
+        if not delivery_enabled() or not str(token_hash or "").strip():
+            raise AuthError(RESET_INVALID)
+        status, body = self._request(
+            "POST",
+            "/auth/v1/verify",
+            {"type": "recovery", "token_hash": str(token_hash)},
+        )
+        if status != 200 or not isinstance(body, dict):
+            raise AuthError(RESET_INVALID)
+        access_token = str(body.get("access_token") or "")
+        if not access_token:
+            raise AuthError(RESET_INVALID)
+        return access_token
+
+    def update_password_from_recovery(self, token: str, new_password: str) -> None:
+        if not delivery_enabled():
+            raise AuthError(RESET_INVALID)
+        if not str(token or "").strip():
+            raise AuthError(RESET_INVALID)
+        try:
+            password_policy.require(new_password)
+        except password_policy.PasswordRejected as exc:
+            raise AuthError(str(exc)) from None
+        status, _body = self._request("PUT", "/auth/v1/user", {"password": new_password}, token=token)
+        if status in {401, 403}:
+            raise AuthError(RESET_INVALID)
+        if status != 200:
+            raise AuthError("Adgangskoden kunne ikke opdateres.")
 
     def update_password(self, token: str, new_password: str) -> None:
         self._require_preview()

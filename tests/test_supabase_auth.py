@@ -174,9 +174,13 @@ class PreviewConfigTests(unittest.TestCase):
         self.assertNotIn("print(", auth_source)
         self.assertNotIn("print(", source)
         self.assertNotIn("example.supabase.co", auth_source)
+        self.assertNotIn("wxvobyifckbpnqfbnlxl", auth_source)
         for line in auth_source.splitlines():
-            if "supabase.co" in line:
-                self.assertIn("ajbsoudovxstlolojvte", line)
+            if "supabase.co" not in line:
+                continue
+            if 'endswith(".supabase.co")' in line:
+                continue
+            self.assertIn("ajbsoudovxstlolojvte", line)
         self.assertNotIn("TRADERDASH_SUPABASE_SERVICE", source)
 
     def test_missing_preview_configuration_skips_without_a_default_user(self):
