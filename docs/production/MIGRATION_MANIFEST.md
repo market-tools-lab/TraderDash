@@ -4,7 +4,7 @@ Dato: 4. november 2026. Branch: `feature/supabase-auth`.
 
 Denne fil er en kørselsliste. Ingen sætning her er kørt mod Production. Preview er `ajbsoudovxstlolojvte` / `https://ajbsoudovxstlolojvte.supabase.co`.
 
-SHA-256 er taget af filernes bytes. Filnavnets tidsstempel og preview-historikkens version er ikke det samme, fordi preview fik migrationen et senere tidspunkt.
+SHA-256 i tabellerne er taget af Windows-arbejdskopierne med CRLF, da filerne blev anvendt. Git gemmer samme SQL-tekst med LF, og testen låser den form. Filnavnets tidsstempel og preview-historikkens version er ikke det samme, fordi preview fik migrationen et senere tidspunkt.
 
 ## Må ikke køres igen
 

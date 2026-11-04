@@ -119,15 +119,22 @@ class ReportTests(unittest.TestCase):
 class PackageTests(unittest.TestCase):
     def test_manifest_hashes_match_the_files(self):
         manifest = (ROOT / "docs" / "production" / "MIGRATION_MANIFEST.md").read_text(encoding="utf-8")
-        expected = {
+        # Checksums recorded from the Windows working copies when the files were applied.
+        recorded = {
             "20261030160000_accounts.sql": "5f3118ea88414be5ee600ed6d966d05a5800bb40410a3a8752294c4a4ae87235",
             "20261104110000_identity_catalog.sql": "fdf53d809b5811baf43afe577be9c86e5fe475c5e1fab20b3bacfb6421573951",
             "20261104140000_legacy_auth_links.sql": "671d8e9e7cd6d6e87b3e668b3b3bf5048a817093f55e07dd75c922f018c3a0c9",
         }
-        for name, digest in expected.items():
-            body = (ROOT / "supabase" / "migrations" / name).read_bytes()
+        # Git stores the same text with LF. Linux CI checks that form out directly.
+        repository = {
+            "20261030160000_accounts.sql": "31ce87d64216c4c0763842a73e6c74ca5e70712a7d3eff1ff6d0134a30f3b5e3",
+            "20261104110000_identity_catalog.sql": "52b0b678d21ef94ba051414f0bcd56cab9c2fe27bed86f09cb5fab2247d071f0",
+            "20261104140000_legacy_auth_links.sql": "b8dd0aea069c89a70b0c358dfab742de52719529511b8296b7f59ccb424c4261",
+        }
+        for name, digest in repository.items():
+            body = (ROOT / "supabase" / "migrations" / name).read_bytes().replace(b"\r\n", b"\n")
             self.assertEqual(hashlib.sha256(body).hexdigest(), digest)
-            self.assertIn(digest, manifest)
+            self.assertIn(recorded[name], manifest)
         rollback = (ROOT / "docs" / "production" / "ROLLBACK.sql").read_text(encoding="utf-8").lower()
         self.assertIn("not for execution", rollback)
         self.assertNotIn("drop table if exists public.users", rollback)
