@@ -1,6 +1,6 @@
 # Valg af mailudbyder
 
-Dato: 4. november 2026. Ingen konto er oprettet. Ingen betaling er foretaget. Ingen DNS er ændret. Ingen SMTP-værdi ligger i repositoriet.
+Dato: 4. november 2026. Opdateret samme dag efter den gennemførte prøve. Udbyderen er Resend. Ingen SMTP-værdi ligger i repositoriet.
 
 Tallene nedenfor er læst den dag på udbydernes egne sider. De kan ændre sig og skal læses igen, før der betales. Dette er ikke en juridisk vurdering.
 
@@ -10,7 +10,7 @@ Supabase Auth skal sende nulstillingsmailen. Appen skal ikke have sin egen mailk
 
 Mailen er transaktionel login-mail. Den må ikke bruges til nyhedsbrev, og modtageren må ikke tilmeldes en marketingsliste. Åbnings- og kliksporing skal være slået fra.
 
-Repositoriet dokumenterer ikke et afsenderdomæne. Valg af domæne er en særskilt beslutning. Indtil da kan der ikke verificeres DNS.
+Afsenderdomænet er `auth.markettools.app` under `markettools.app`. DNS-posternes værdier står ikke i repositoriet og er ikke ændret i denne note.
 
 ## Sammenligning
 
@@ -50,30 +50,24 @@ Kilde: `https://aws.amazon.com/ses/pricing/`, læst 4. november 2026.
 - GDPR-aftalen ligger i AWS' egen aftalepakke og skal hentes der. Den er ikke citeret her.
 - Billigst ved høj volumen. Ikke det enkleste første valg.
 
-## Anbefaling
+## Beslutning
 
-Foretrukken udbyder: Postmark.
+Valgt og prøvet: Resend.
 
-Grund: Supabase skal bruge SMTP, og Postmark skiller transaktionel mail fra broadcast. Bounce, complaint og suppression er en del af produktet. Prisen er et lille fast beløb, ikke et AWS-projekt. DPA'en er offentlig. 100 gratis mails rækker kun til en kort prøve. En rigtig pilot kræver Basic eller tilsvarende.
+4. november 2026 leverede Resend én nulstillingsmail for den eksisterende Auth-pilot. Afsenderadressen var `noreply@auth.markettools.app`. Afsendernavnet blev vist som TraderDash. Emnet var "Nulstil din adgangskode til TraderDash". Linket åbnede `https://traderdash-next.streamlit.app`, adgangskoden blev skiftet i appen, og login bagefter virkede. SMTP-nøglen ligger kun i Supabase.
 
-Reserve: Resend.
+Postmark var det første skriftlige forslag og er ikke den udbyder, der blev sat op. Sammenligningen ovenfor bliver stående som baggrund. Supabase' indbyggede afsender og Amazon SES er stadig ikke valgt.
 
-Grund: lavere startpris, inklusive et brugbart gratis loft, og en kort SMTP-opskrift. Den er reserven, hvis den månedlige Postmark-pris ikke skal betales endnu. Sporing skal slås fra, og dataregionen skal bekræftes.
+Sporing på login-mail skal blive slået fra hos Resend, hvis den ikke allerede er det. Det er ikke genlæst i udbyderens konto i denne note.
 
-Udskudt: Supabase' indbyggede afsender, fordi loftet og modtagerbegrænsningen ikke bærer en lancering. Amazon SES, indtil volumen eller en eksisterende AWS-drift gør det ekstra arbejde rimeligt.
+## DNS
 
-Beslutningen er ikke truffet. Theis godkender udbyderen, før der oprettes en konto.
+Afsenderen `auth.markettools.app` er i brug. Posternes værdier er ikke kopieret hertil og er ikke ændret i denne note. De enkelte poster er ikke genlæst.
 
-## DNS, når en udbyder og et domæne er valgt
-
-Ingen poster er kendt endnu. Udbyderen skal udstede værdierne. Principper:
-
-- Brug et underdomæne kun til transaktionel mail, for eksempel `auth` under det domæne Theis vælger. Roddomænet bruges ikke som afsender, hvis det allerede sender almindelig post.
-- Præcis én SPF-TXT pr. værtsnavn. En ny udbyder må ikke tilføjes ved at oprette en ekstra SPF-post.
-- DKIM slås til.
-- DMARC starter bevidst, typisk med overvågning, og strammes først når afvisninger er forstået. Den konkrete politik vælges ved opsætningen.
-- Verifikation og eventuel return-path eller bounce-vært kommer fra udbyderen.
-- Sporingsdomæne bruges ikke til login-mail.
+- Underdomænet `auth` er afsenderen. Roddomænet `markettools.app` er ikke afsenderen.
+- Én SPF-TXT pr. værtsnavn.
+- DKIM, DMARC og eventuel return-path kommer fra opsætningen og står ikke her.
+- Sporingsdomæne skal ikke bruges til login-mail. Det er ikke genlæst i Resend-kontoen.
 - Rollback er at fjerne de poster, udbyderen bad om, og slå custom SMTP fra. Eksisterende post på andre værtsnavne røres ikke.
 
 ## Data

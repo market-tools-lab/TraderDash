@@ -2,7 +2,7 @@
 
 Dato: 4. november 2026. Branch: `feature/auth-email-recovery`.
 
-Ingen mail er sendt. Ingen SMTP-konto er oprettet. Ingen DNS er ændret. Registrering er lukket. Stripe er slået fra. Legacy forbliver default.
+Registrering er lukket. Stripe er slået fra. Legacy forbliver default. Én rigtig nulstillingsmail er sendt og gennemført samme dag. Den er beskrevet under "Gennemført prøve". Suite-testen sender stadig ingen mail.
 
 ## Hvad koden allerede gjorde
 
@@ -58,23 +58,46 @@ Supabase Auth, læst 4. november 2026 på `https://supabase.com/docs/guides/auth
 - Egen SMTP starter med et lavt loft. Dokumentationen nævner 30 mails i timen, indtil loftet hæves under Authentication, Rate Limits.
 - `POST /auth/v1/recover` har som udgangspunkt 60 sekunder pr. bruger og et IP-loft på 30 forespørgsler pr. 5 minutter.
 
-Udbyderen har sit eget loft. Tallene skal læses igen, før recovery tændes. Appen opfinder ikke en fælles hukommelses-tæller og kalder den ikke tilstrækkelig.
+Udbyderen har sit eget loft. Tallene skal læses igen, før recovery tændes for en anden app. Appen opfinder ikke en fælles hukommelses-tæller og kalder den ikke tilstrækkelig.
 
 ## Skabeloner
 
-Kladderne ligger i `docs/production/email/`. De skal senere indsættes i Supabase under Authentication, Email Templates, skabelonen Reset password. `{{ .RedirectTo }}` skal være den allowlistede app-URL uden query, så skabelonen kan tilføje `?token_hash={{ .TokenHash }}&type=recovery`.
+Kladderne ligger i `docs/production/email/`. Reset password-skabelonen i Supabase er den danske kladde. `{{ .RedirectTo }}` er den allowlistede app-URL uden query, og skabelonen tilføjer `?token_hash={{ .TokenHash }}&type=recovery`. Prøven brugte den.
 
 `password-changed.txt` er ikke til udsendelse. Appen bekræfter skiftet på skærmen. En mail om ændret adgangskode tændes ikke i denne omgang.
 
-## Supabase-dashboard, senere
+## Supabase-dashboard
 
-Gøres først efter udbydervalget. Ikke i denne branch.
+Sat på Production `wxvobyifckbpnqfbnlxl` før prøven. Værdierne ligger kun i dashboardet.
 
-- Redirect URLs: den præcise pilot-URL og, hvis der testes lokalt, `http://localhost:8501`. Ikke legacy-appen `https://traderdash-market.streamlit.app`.
-- Site URL må ikke flyttes over på legacy-appen.
-- SMTP: host, port, bruger, adgangskode, afsenderadresse og afsendernavn fra den valgte udbyder. Værdierne skrives kun i dashboardet.
-- Reset password-skabelonen erstattes med kladden. Åbnings- og kliksporing slås fra.
-- Rate limit for mail hæves først, når afsenderdomænet er verificeret, og kun til et tal der passer til det forventede volumen.
+- Redirect URLs: `https://traderdash-next.streamlit.app`. Ikke legacy-appen `https://traderdash-market.streamlit.app`.
+- Site URL er ikke flyttet over på legacy-appen.
+- SMTP peger på Resend. Afsender er `noreply@auth.markettools.app`. Afsendernavnet vises som TraderDash. Adgangskoden ligger ikke her.
+- Reset password-skabelonen er den danske kladde. Emnet er "Nulstil din adgangskode til TraderDash".
+- Beskeden "Email address changed" var slået fra, da Auth-adressen blev skiftet med Admin API.
+
+## Gennemført prøve
+
+Dato: 4. november 2026. Én anmodning fra `https://traderdash-next.streamlit.app`.
+
+| Kontrol | Resultat |
+| --- | --- |
+| Auth-bruger | Samme id `e8469788-5089-45f4-8a77-60440aa56fc7` |
+| Auth-mail | `theisbjerken@gmail.com`, bekræftet |
+| Profil | Samme id |
+| Link | `pilot-i9`, `migrated`, samme Auth-id |
+| Entitlement | Én aktiv TraderDash Free, kilde `migration`. Ingen ny række |
+| Stripe | Ingen `stripe_events`. Ingen betalt entitlement |
+| Legacy-række | `public.users` er stadig `traderdashtesttest@example.dk`, plan `free` |
+| Migrationer | `accounts`, `identity_catalog`, `legacy_auth_links`. Ingen ny |
+| Pilotens svar | "Hvis der er en konto til e-mailadressen, sender vi en vejledning." |
+| Mail | Ankom. Afsender TraderDash, `noreply@auth.markettools.app` |
+| Linkvært | `traderdash-next.streamlit.app` |
+| Ny adgangskode | Formularen blev brugt. Appen svarede "Adgangskoden er opdateret. Log ind igen." |
+| Login bagefter | Samme Free-bruger |
+| Anden mail | Ikke sendt |
+
+Token, det fulde link, adgangskoden og SMTP-nøglen er ikke skrevet ned.
 
 ## Rollback
 
