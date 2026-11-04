@@ -210,8 +210,10 @@ def migrate(
     current = gateway.entitlement_for(request.auth_user_id, request.product_code)
     if current and current.get("source") not in (None, "migration"):
         return _reject("entitlement_conflict", request)
-    ignored_ends_at = request.ends_at is not None and not mapped.grants_access
     same = _same_entitlement(current, mapped)
+    if current is not None and not same:
+        return _reject("entitlement_drift", request)
+    ignored_ends_at = request.ends_at is not None and not mapped.grants_access
     if dry_run:
         return MigrationReport(
             "dry_run",
@@ -236,6 +238,7 @@ def migrate(
             False,
             ignored_ends_at,
         )
+    wrote = False
     if legacy_link is None:
         gateway.write_link(
             {
@@ -244,14 +247,17 @@ def migrate(
                 "migration_reference": request.migration_reference,
             }
         )
-    gateway.write_entitlement(
-        {
-            "auth_user_id": request.auth_user_id,
-            "product_code": request.product_code,
-            "plan_code": mapped.plan_code,
-            "status": mapped.entitlement_status,
-        }
-    )
+        wrote = True
+    if not same:
+        gateway.write_entitlement(
+            {
+                "auth_user_id": request.auth_user_id,
+                "product_code": request.product_code,
+                "plan_code": mapped.plan_code,
+                "status": mapped.entitlement_status,
+            }
+        )
+        wrote = True
     return MigrationReport(
         mapped.outcome,
         mapped.reason,
@@ -260,7 +266,7 @@ def migrate(
         mapped.plan_code,
         mapped.entitlement_status,
         mapped.grants_access,
-        True,
+        wrote,
         ignored_ends_at,
     )
 

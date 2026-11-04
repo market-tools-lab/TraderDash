@@ -162,6 +162,36 @@ class MigrationTests(unittest.TestCase):
         active = [row for row in gateway.entitlements.values() if row["status"] == "active"]
         self.assertEqual(len(active), 1)
 
+    def test_a_different_entitlement_is_not_replaced(self):
+        gateway = pilot_migration.RecordingGateway()
+        _pair(gateway, "legacy-1", "auth-1", "free", "free")
+        gateway.links_by_legacy["legacy-1"] = {"auth_user_id": "auth-1", "legacy_user_id": "legacy-1"}
+        gateway.links_by_auth["auth-1"] = gateway.links_by_legacy["legacy-1"]
+        gateway.entitlements[("auth-1", "traderdash")] = {
+            "plan_code": "nordic",
+            "status": "active",
+            "source": "migration",
+        }
+        report = pilot_migration.migrate(_request(), gateway)
+        self.assertEqual(report.reason, "entitlement_drift")
+        self.assertFalse(report.wrote)
+        self.assertEqual(gateway.writes, [])
+        self.assertEqual(gateway.entitlements[("auth-1", "traderdash")]["plan_code"], "nordic")
+
+    def test_missing_link_does_not_insert_a_second_entitlement(self):
+        gateway = pilot_migration.RecordingGateway()
+        _pair(gateway, "legacy-1", "auth-1", "free", "free")
+        gateway.entitlements[("auth-1", "traderdash")] = {
+            "auth_user_id": "auth-1",
+            "product_code": "traderdash",
+            "plan_code": "free",
+            "status": "active",
+            "source": "migration",
+        }
+        report = pilot_migration.migrate(_request(), gateway)
+        self.assertTrue(report.wrote)
+        self.assertEqual([write["kind"] for write in gateway.writes], ["link"])
+
     def test_dry_run_writes_nothing(self):
         gateway = pilot_migration.RecordingGateway()
         _pair(gateway, "legacy-1", "auth-1", "international", "active")
