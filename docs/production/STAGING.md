@@ -15,4 +15,6 @@ Læst 2026-11-04 på Production, uden skrivning: 1 legacy-bruger, 1 Auth-bruger,
 
 Rollback for piloten er at slette kun den app. Schema, Auth-bruger og legacy-app bliver. Nulstilling er stadig låst til preview, fordi mailleverandør ikke er valgt.
 
-Før en senere merge: kør `python -m unittest discover -s tests`, og sæt ikke Auth-secret på legacy-appen.
+GitHub Actions kører samme suite på Python 3.12 for pull requests mod `master` og push til `feature/**`. Workflowet bruger ingen Production-secrets og kører ingen migration.
+
+En merge til `master` ændrer ikke Cloud-indstillinger, Auth-mode, pilotens branch eller Stripe. Sæt ikke Auth-secret på legacy-appen.

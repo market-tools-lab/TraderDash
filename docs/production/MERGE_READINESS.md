@@ -14,14 +14,16 @@ Piloten peger på `feature/supabase-auth`. Den følger ikke `master`, før dens 
 
 | Punkt | Status |
 | --- | --- |
-| Fuld testsuite | Skal være grøn på merge-committen |
+| Fuld testsuite | CI kører `python -m unittest discover -s tests` på Python 3.12 uden secrets |
 | Registrering | Lukket i Auth-mode. Skal forblive lukket |
 | Stripe | Flag false. Ingen live-nøgle |
-| Mailleverandør | Ikke valgt. Nulstilling er låst til preview |
-| Sletning | Kun lokal. Ingen knap |
-| Restore | Ikke udført |
+| Mailleverandør | Ikke valgt. Det blokerer ikke en kodemerge |
+| Sletning | Kun lokal. Ingen knap. Det blokerer ikke en kodemerge |
+| Restore | Ikke udført. Det blokerer ikke en kodemerge |
 | Vært | Community Cloud. Image er ikke deployet |
 | Historiske auditfiler | Ignoreret. Ikke en del af mergen |
-| CI | Findes ikke |
+| CI | `.github/workflows/release-gate.yml` |
+
+En merge kopierer kode. Den kører ikke SQL, skifter ikke Cloud-secrets og flytter ikke DNS. Migrationerne er allerede anvendt på Production og må ikke køres igen. Filkommentaren `NOT APPLIED` i identitetskataloget er låst af testen. Driftshistorikken er kilden.
 
 Rollback efter en senere merge er at flytte `master` tilbage til `4d292da` og lade legacy-appens secrets være. Production-schema og pilotbrugeren rulles ikke tilbage af en Git-merge.
