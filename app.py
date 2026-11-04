@@ -11,6 +11,7 @@ import streamlit as st
 import access
 import account_page
 import accounts
+import supabase_auth
 from market_data import describe_freshness, get_history, get_quote
 
 TRADING_DAYS = 252
@@ -542,6 +543,26 @@ def build_chart(history: pd.DataFrame, indicator_rsi: pd.Series, indicator_macd:
     return figure
 
 
+_SAFE_AUTH_MESSAGES = {
+    "Supabase Auth er ikke konfigureret.",
+    "Supabase Auth er ikke tilgængelig.",
+    "Nulstilling kan ikke sendes.",
+    "Nulstillingen er ikke gyldig.",
+    "Adgangskoden kunne ikke opdateres.",
+    "Adgangskoderne er ikke ens.",
+    "Adgangskoden skal være mellem 12 og 128 tegn.",
+    "Adgangskoden er for svag.",
+    "Kontoen er ikke klar.",
+}
+
+
+def _auth_notice(exc: supabase_auth.AuthError) -> str:
+    text = str(exc)
+    if text in _SAFE_AUTH_MESSAGES:
+        return text
+    return "Supabase Auth er ikke tilgængelig."
+
+
 def _clear_user_session(*, logout: bool) -> None:
     for key in [key for key in st.session_state if str(key).startswith("selected_symbol")]:
         del st.session_state[key]
@@ -549,11 +570,82 @@ def _clear_user_session(*, logout: bool) -> None:
         st.session_state.pop(key, None)
     if logout:
         st.session_state.pop("auth_user_id", None)
+        supabase_auth.clear_local(st.session_state)
 
 
 def _logout() -> None:
+    if supabase_auth.auth_mode() == "supabase_auth":
+        supabase_auth.logout(st.session_state)
     st.session_state["_pending_logout"] = True
     st.rerun()
+
+
+def _render_supabase_login() -> None:
+    with st.form("login"):
+        email = st.text_input("E-mail", key="login_email")
+        password = st.text_input("Adgangskode", type="password", key="login_password")
+        submitted = st.form_submit_button("Log ind", type="primary")
+    if submitted:
+        rejected = False
+        try:
+            session = supabase_auth.sign_in(email, password)
+        except supabase_auth.AuthError as exc:
+            st.error(_auth_notice(exc))
+            rejected = True
+        except Exception:
+            st.error("Supabase Auth er ikke tilgængelig.")
+            rejected = True
+        else:
+            if session is None:
+                st.error("Forkert e-mail eller adgangskode.")
+                rejected = True
+            else:
+                _clear_user_session(logout=False)
+                supabase_auth.remember(session, st.session_state)
+                st.rerun()
+        if rejected:
+            supabase_auth.forget_password(st.session_state)
+    st.caption("Ny konto oprettes ikke i denne loginvej.")
+    _render_supabase_reset()
+
+
+def _render_supabase_reset() -> None:
+    with st.form("reset"):
+        email = st.text_input("E-mail til nulstilling", key="reset_email")
+        submitted = st.form_submit_button("Send nulstillingslink")
+    if submitted:
+        try:
+            supabase_auth.request_password_reset(email, supabase_auth.PREVIEW_ORIGIN)
+        except supabase_auth.AuthError as exc:
+            st.error(_auth_notice(exc))
+        except Exception:
+            st.error("Supabase Auth er ikke tilgængelig.")
+        else:
+            st.info(supabase_auth.RESET_MESSAGE)
+        supabase_auth.forget_password(st.session_state)
+
+
+def _render_supabase_password_change() -> None:
+    with st.form("change_password"):
+        new_password = st.text_input("Ny adgangskode", type="password", key="next_password")
+        confirmation = st.text_input("Gentag ny adgangskode", type="password", key="next_confirmation")
+        submitted = st.form_submit_button("Skift adgangskode")
+    if submitted:
+        try:
+            supabase_auth.change_password(
+                str(st.session_state.get(supabase_auth.TOKEN_KEY) or ""),
+                new_password,
+                confirmation,
+            )
+        except supabase_auth.AuthError as exc:
+            st.error(_auth_notice(exc))
+        except Exception:
+            st.error("Supabase Auth er ikke tilgængelig.")
+        else:
+            supabase_auth.sign_out_all_supported_sessions(st.session_state)
+            st.session_state["_pending_logout"] = True
+            st.rerun()
+        supabase_auth.forget_password(st.session_state)
 
 
 def render_account_gate() -> None:
@@ -609,15 +701,43 @@ for query_key in ("ticker", "symbol", "stock", "code", "user", "user_id", "plan"
 if st.session_state.pop("_pending_logout", False):
     _clear_user_session(logout=True)
 
-try:
-    signed_in = accounts.get_user(str(st.session_state.get("auth_user_id") or ""))
-except accounts.AccountConfigError as exc:
-    st.error(str(exc))
+if supabase_auth.auth_mode() != "supabase_auth" and (
+    st.session_state.get(supabase_auth.TOKEN_KEY) or st.session_state.get(supabase_auth.USER_KEY)
+):
+    supabase_auth.clear_local(st.session_state)
+    supabase_auth.forget_password(st.session_state)
+    st.error("Login-måden er ændret. Log ind igen.")
     st.stop()
-if signed_in is None:
-    _clear_user_session(logout=True)
-    render_account_gate()
-    st.stop()
+
+if supabase_auth.auth_mode() == "supabase_auth":
+    try:
+        supabase_session = supabase_auth.load_saved_session(st.session_state)
+    except supabase_auth.AuthError as exc:
+        st.error(_auth_notice(exc))
+        st.stop()
+    except Exception:
+        st.error("Supabase Auth er ikke tilgængelig.")
+        st.stop()
+    if supabase_session is None:
+        _clear_user_session(logout=True)
+        _render_supabase_login()
+        st.stop()
+    if supabase_session.profile_id != supabase_session.user_id:
+        st.error("Kontoen er ikke klar.")
+        if st.button("Log ud", key="profile_logout"):
+            _logout()
+        st.stop()
+    signed_in = supabase_session.as_user()
+else:
+    try:
+        signed_in = accounts.get_user(str(st.session_state.get("auth_user_id") or ""))
+    except accounts.AccountConfigError as exc:
+        st.error(str(exc))
+        st.stop()
+    if signed_in is None:
+        _clear_user_session(logout=True)
+        render_account_gate()
+        st.stop()
 
 with st.sidebar:
     st.header("Opslag")
@@ -636,7 +756,13 @@ with st.sidebar:
     risk_free_pct = st.slider("Risikofri rente (%)", min_value=0.0, max_value=8.0, value=2.0, step=0.5)
     risk_free_rate = risk_free_pct / 100
     st.caption("Perioden og renten bruges både på enkeltaktien og i watchlisten.")
-    if accounts.developer_override_enabled():
+    if supabase_auth.auth_mode() == "supabase_auth":
+        plan = signed_in.plan if signed_in.plan in access.PLANS else ""
+        if plan in access.PLANS:
+            st.caption(f"Plan: {access.PLAN_LABELS.get(plan, 'Free')}")
+        else:
+            st.caption("Plan: Ingen adgang")
+    elif accounts.developer_override_enabled():
         if st.session_state.get("dev_plan") not in access.PLANS:
             st.session_state.dev_plan = accounts.resolve_plan(signed_in.plan)
         st.selectbox(
@@ -656,7 +782,20 @@ with st.sidebar:
         _logout()
 
 if st.session_state.get("main_view") == "account":
+    if supabase_auth.auth_mode() == "supabase_auth":
+        _render_supabase_password_change()
+    if plan not in access.PLANS:
+        st.header("Konto")
+        st.caption(signed_in.email)
+        st.info("Ingen aktiv TraderDash-adgang.")
+        if st.button("Log ud", key="account_logout_closed"):
+            _logout()
+        st.stop()
     account_page.render_account(signed_in, plan, _logout)
+    st.stop()
+
+if plan not in access.PLANS:
+    st.info("Ingen aktiv TraderDash-adgang.")
     st.stop()
 
 single_tab, watch_tab = st.tabs(["Enkelt Aktie", "Watchlist Overblik"])

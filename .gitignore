@@ -28,6 +28,16 @@ htmlcov/
 data/
 *.db
 
+# Historical audit from 2 November 2026 against an older master.
+# It is not the current source of truth and stays out of the merge.
+docs/TRADERDASH_ACCOUNT_ACCESS_TEMPLATE.md
+docs/TRADERDASH_ARCHITECTURE.mmd
+docs/TRADERDASH_DATA_INVENTORY.md
+docs/TRADERDASH_DEPLOYMENT_REQUIREMENTS.md
+docs/TRADERDASH_EXECUTIVE_SUMMARY.md
+docs/TRADERDASH_SECURITY_FINDINGS.md
+docs/TRADERDASH_TECHNICAL_AUDIT.md
+
 # Supabase CLI local state
 supabase/.temp/
 supabase/.branches/
