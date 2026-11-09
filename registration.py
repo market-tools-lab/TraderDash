@@ -28,7 +28,10 @@ REPAIR_ENABLED = False
 ENTITLEMENT_FUNCTION_DEPLOYED = True
 SUPPORT_MAILBOX_OPERATIONAL = True
 LEGAL_DECISIONS_COMPLETE = False
+SELF_ENROLLMENT_DEPLOYED = False
 FREE_PLAN = "free"
+_REPAIR_TARGET = "local-test"
+_ACCEPTED_FREE_SOURCES = frozenset({"signup", "migration"})
 REQUEST_MESSAGE = "Hvis adressen kan bruges, sender vi en bekræftelse."
 _MESSAGES = {
     "closed": "Ny konto oprettes ikke i denne loginvej.",
@@ -149,21 +152,28 @@ def complete_verification(
     if not registration_open() or supabase_auth.auth_mode() != "supabase_auth":
         _log("REGISTRATION_BLOCKED", reason="closed")
         raise RegistrationRejected("closed")
-    if verify is None:
-        def verify(token: str) -> Mapping[str, Any]:
-            return supabase_auth.Client.from_env(transport).exchange_signup(token)
     try:
-        checked = dict(verify(token_hash))
+        if verify is None:
+            checked = dict(supabase_auth.Client.from_env(transport).confirm_traderdash_signup(token_hash))
+            merged = {
+                "user_id": str(checked.get("user_id") or ""),
+                "target_ref": str(checked.get("target_ref") or ""),
+                "confirmed": bool(checked.get("confirmed")),
+                "profile": bool(checked.get("profile")),
+                "entitlements": checked.get("entitlements") or [],
+                "acknowledgement_version": str(checked.get("acknowledgement_version") or ""),
+            }
+        else:
+            checked = dict(verify(token_hash))
+            merged = dict(record)
+            merged["user_id"] = str(checked.get("user_id") or "")
+            merged["confirmed"] = bool(checked.get("confirmed"))
     except supabase_auth.AuthError as exc:
         _log("REGISTRATION_BLOCKED", reason="expired")
         raise RegistrationRejected("expired") from exc
     if checked.get("expired"):
         _log("REGISTRATION_BLOCKED", reason="expired")
         raise RegistrationRejected("expired")
-    user_id = str(checked.get("user_id") or "")
-    merged = dict(record)
-    merged["user_id"] = user_id
-    merged["confirmed"] = bool(checked.get("confirmed"))
     report = reconcile(merged)
     if report["access"]:
         _log("REGISTRATION_COMPLETED")
@@ -189,7 +199,7 @@ def reconcile(record: Mapping[str, Any]) -> dict[str, Any]:
     findings = []
     if user_id in account_privacy.PROTECTED_IDS:
         findings.append("protected")
-    if target in account_privacy.PROTECTED_REFS:
+    if target != account_privacy.PRODUCTION_REF:
         findings.append("environment")
     if not confirmed:
         findings.append("email_unconfirmed")
@@ -205,6 +215,9 @@ def reconcile(record: Mapping[str, Any]) -> dict[str, Any]:
         findings.append("duplicate_free")
     if other:
         findings.append("unexpected_plan")
+    source = str(free[0].get("source") or "") if len(free) == 1 else ""
+    if len(free) == 1 and source not in _ACCEPTED_FREE_SOURCES:
+        findings.append("unexpected_source")
     access = (
         confirmed
         and profile
@@ -213,6 +226,7 @@ def reconcile(record: Mapping[str, Any]) -> dict[str, Any]:
         and "protected" not in findings
         and "environment" not in findings
         and "email_unconfirmed" not in findings
+        and "unexpected_source" not in findings
     )
     papers = len(universes.stocks_for(FREE_PLAN)) if access else 0
     return {
@@ -234,6 +248,7 @@ def reconcile(record: Mapping[str, Any]) -> dict[str, Any]:
             "profile": profile,
             "free_entitlements": len(free),
             "papers": papers,
+            "source": source,
         },
         "mutates": False,
         "repair_enabled": REPAIR_ENABLED,
@@ -250,8 +265,11 @@ def apply_free_entitlement(
     report = reconcile(record)
     if repair is not True or writer is None:
         raise RegistrationRejected("repair_disabled")
-    if "environment" in report["findings"] or "protected" in report["findings"]:
-        raise RegistrationRejected("protected" if "protected" in report["findings"] else "environment")
+    target = str(record.get("target_ref") or "").strip()
+    if "protected" in report["findings"]:
+        raise RegistrationRejected("protected")
+    if target != _REPAIR_TARGET:
+        raise RegistrationRejected("environment")
     if report["actions"] != ["create_free"]:
         return report
     writer({"user_id": report["user_id"], "plan": FREE_PLAN, "product": "traderdash", "status": "active"})
@@ -270,6 +288,7 @@ def launch_gate(evidence: Mapping[str, Any] | None = None, *, root=None) -> dict
     operations_doc = base / "docs" / "production" / "OPERATIONS.md"
     lifecycle_doc = base / "docs" / "production" / "ACCOUNT_LIFECYCLE.md"
     provision = (base / "supabase" / "migrations" / "20261109110000_provision_traderdash_free.sql").read_text(encoding="utf-8")
+    bridge = (base / "supabase" / "migrations" / "20261109140000_provision_traderdash_free_self.sql").read_text(encoding="utf-8")
     component = (base / "captcha_component" / "index.html").read_text(encoding="utf-8")
     platform = (base / "docs" / "production" / "MARKET_TOOLS_PLATFORM.md").read_text(encoding="utf-8")
     terms = (base / "docs" / "production" / "TERMS_OF_USE.md").read_text(encoding="utf-8")
@@ -296,6 +315,7 @@ def launch_gate(evidence: Mapping[str, Any] | None = None, *, root=None) -> dict
         "free_entitlement_idempotent": "PASS",
         "entitlement_function_prepared": "PASS" if "revoke all on function public.provision_traderdash_free(uuid) from public, anon, authenticated;" in provision else "FAIL",
         "entitlement_function_deployed": "PASS" if ENTITLEMENT_FUNCTION_DEPLOYED else _external(supplied, "entitlement_function_deployed"),
+        "self_enrollment_prepared": "PASS" if _self_enrollment_ready(bridge) and not SELF_ENROLLMENT_DEPLOYED else "FAIL",
         "pilot_recreation_documented": "PASS" if "Genskabelse" in pilot else "FAIL",
         "pilot_branch_deployed": _external(supplied, "pilot_branch_deployed"),
         "deletion_policy_documented": "PASS" if lifecycle_doc.is_file() else "FAIL",
@@ -307,6 +327,21 @@ def launch_gate(evidence: Mapping[str, Any] | None = None, *, root=None) -> dict
         "monitoring_runbook_current": "PASS" if operations_doc.is_file() and "release-gate" in operations_doc.read_text(encoding="utf-8") else "FAIL",
     }
     return {"items": items, "open_registration": False, "decision": "closed"}
+
+
+def _self_enrollment_ready(sql: str) -> bool:
+    compact = " ".join(sql.split())
+    return (
+        "NOT APPLIED" in sql
+        and "auth.uid()" in sql
+        and "email_confirmed_at" in sql
+        and "perform public.provision_traderdash_free(actor)" in compact
+        and "when unique_violation then" in compact
+        and "revoke all on function public.provision_traderdash_free_self() from public, anon;" in sql
+        and "grant execute on function public.provision_traderdash_free_self() to authenticated;" in sql
+        and "grant execute on function public.provision_traderdash_free_self() to anon" not in sql
+        and "service_role" not in sql
+    )
 
 
 def _token_return_ready(component: str) -> bool:

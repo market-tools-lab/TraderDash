@@ -2,8 +2,9 @@
 
 This module is used only when TRADERDASH_AUTH_MODE is supabase_auth.
 A missing or unknown mode stays on the legacy login. The module reads the
-signed-in user's profile and TraderDash entitlement. It does not write
-entitlements, and it does not keep the password.
+signed-in user's profile and TraderDash entitlement. The only product write
+is the zero-argument enrollment call, which the database runs as that user.
+It does not keep the password.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlsplit
 
+import account_privacy
 import password_policy
 from account_store import User
 
@@ -122,6 +124,37 @@ def load_saved_session(state: MutableMapping[str, Any], *, transport=None) -> "A
         return None
     remember(session, state)
     return session
+
+
+def continue_traderdash_enrollment(
+    session: "AuthSession | None",
+    *,
+    transport=None,
+) -> "AuthSession | None":
+    """Enroll this confirmed user once when TraderDash Free is still missing."""
+    if session is None or session.plan is not None or not session.profile_id:
+        return session
+    client = Client.from_env(transport)
+    if not client.allows_product_enrollment():
+        return session
+    try:
+        rows = client.read_entitlements(session.access_token)
+    except AuthError:
+        _ops("ENTITLEMENT_FAILURE", where="self_enrollment")
+        return session
+    if rows:
+        return session
+    try:
+        client.enroll_self(session.access_token)
+    except AuthError:
+        _ops("PRODUCT_ENROLLMENT", outcome="refused")
+        return session
+    _ops("PRODUCT_ENROLLMENT", outcome="requested")
+    try:
+        enrolled = client._session(session.access_token, session.user_id, session.email)
+    except AuthError:
+        return session
+    return enrolled
 
 
 def logout(state: MutableMapping[str, Any], *, transport=None) -> None:
@@ -512,6 +545,116 @@ class Client:
         if not user_id:
             raise AuthError("Linket er ikke gyldigt længere.")
         return {"user_id": user_id, "confirmed": True, "expired": False}
+
+    def allows_product_enrollment(self) -> bool:
+        """The deleted preview and every project other than Production stay outside enrollment."""
+        return self._ref() == account_privacy.PRODUCTION_REF and self.base_url != PREVIEW_ORIGIN
+
+    def enroll_self(self, access_token: str) -> None:
+        """Ask the database to enroll this confirmed caller. The body carries no user id."""
+        if not self.allows_product_enrollment():
+            raise AuthError("Kontoen er ikke klar.")
+        token = str(access_token or "").strip()
+        if not token:
+            raise AuthError("Kontoen er ikke klar.")
+        status, _body = self._request(
+            "POST",
+            "/rest/v1/rpc/provision_traderdash_free_self",
+            {},
+            token=token,
+        )
+        if status not in {200, 204}:
+            raise AuthError("Kontoen er ikke klar.")
+
+    def read_entitlements(self, access_token: str) -> list[dict[str, Any]]:
+        _profile, rows = self.read_account(access_token, "")
+        return rows
+
+    def read_account(self, access_token: str, user_id: str) -> tuple[bool, list[dict[str, Any]]]:
+        """Read this caller's profile and entitlements. The token is not returned."""
+        profile_status, profiles = self._request(
+            "GET",
+            "/rest/v1/profiles?select=id",
+            token=access_token,
+        )
+        entitlement_status, rows = self._request(
+            "GET",
+            "/rest/v1/entitlements?select=status,source,products(code),plans(code)",
+            token=access_token,
+        )
+        if profile_status in {401, 403} or entitlement_status in {401, 403}:
+            raise AuthError("Supabase Auth er ikke tilgængelig.")
+        profile = False
+        if user_id and isinstance(profiles, list):
+            profile = any(isinstance(row, dict) and row.get("id") == user_id for row in profiles)
+        normalized: list[dict[str, Any]] = []
+        if isinstance(rows, list):
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                normalized.append(
+                    {
+                        "status": row.get("status"),
+                        "source": row.get("source"),
+                        "product": _nested_code(row.get("products")),
+                        "plan": _nested_code(row.get("plans")),
+                    }
+                )
+        return profile, normalized
+
+    def confirm_traderdash_signup(self, token_hash: str) -> dict[str, Any]:
+        """Confirm the Auth address, enroll TraderDash, then drop the session."""
+        from registration import registration_open
+
+        if not self.allows_product_enrollment() or not registration_open():
+            raise AuthError("Linket er ikke gyldigt længere.")
+        if not str(token_hash or "").strip():
+            raise AuthError("Linket er ikke gyldigt længere.")
+        status, body = self._request(
+            "POST",
+            "/auth/v1/verify",
+            {"type": "signup", "token_hash": str(token_hash)},
+        )
+        if status != 200 or not isinstance(body, dict):
+            raise AuthError("Linket er ikke gyldigt længere.")
+        user = body.get("user") if isinstance(body.get("user"), dict) else {}
+        user_id = str(user.get("id") or "")
+        if not user_id:
+            raise AuthError("Linket er ikke gyldigt længere.")
+        access_token = str(body.get("access_token") or "")
+        metadata = user.get("user_metadata") if isinstance(user.get("user_metadata"), dict) else {}
+        confirmed = bool(user.get("email_confirmed_at") or user.get("confirmed_at"))
+        profile = False
+        entitlements: list[dict[str, Any]] = []
+        try:
+            if access_token:
+                try:
+                    self.enroll_self(access_token)
+                    _ops("PRODUCT_ENROLLMENT", outcome="requested")
+                except AuthError:
+                    _ops("PRODUCT_ENROLLMENT", outcome="refused")
+                profile, entitlements = self.read_account(access_token, user_id)
+        finally:
+            if access_token:
+                try:
+                    self.logout(access_token)
+                except AuthError:
+                    pass
+        return {
+            "user_id": user_id,
+            "confirmed": confirmed,
+            "expired": False,
+            "profile": profile,
+            "entitlements": entitlements,
+            "acknowledgement_version": str(metadata.get("acknowledgement_version") or ""),
+            "target_ref": self._ref(),
+        }
+
+    def _ref(self) -> str:
+        host = (urlsplit(self.base_url).hostname or "").lower()
+        if not host.endswith(".supabase.co"):
+            return ""
+        return host.split(".")[0]
 
     def update_password_from_recovery(self, token: str, new_password: str) -> None:
         if not delivery_enabled():

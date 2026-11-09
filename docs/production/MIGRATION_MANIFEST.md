@@ -85,3 +85,11 @@ Appens rollback er `TRADERDASH_AUTH_MODE=legacy` eller en fjernet variabel. Clou
 Projekt: Traderdash, `wxvobyifckbpnqfbnlxl`. Tidspunktet i historikken er 2026-11-09 11:19:18 UTC. Filnavnets version er `20261109110000`. Filhovedet siger stadig `NOT APPLIED`. Det er forberedelsesstemplet, og checksummen gælder den kørt tekst. Lokal prøve var bestået forinden og blev ikke gentaget. Efterkontrollen bestod: funktionen findes, `anon` og `authenticated` kan ikke kalde den, og den eksisterende Free-entitlement er uændret.
 
 Funktionen giver én Free-entitlement til TraderDash, når `postgres` eller `service_role` kalder den. Den kørte ikke af sig selv for den eksisterende Auth-bruger. Den ændrer ikke en eksisterende aktiv entitlement.
+
+## Forberedt 9. november 2026, ikke kørt
+
+| Rækkefølge | Fil | SHA-256 af LF-teksten | Production |
+| --- | --- | --- | --- |
+| 4 | `supabase/migrations/20261109140000_provision_traderdash_free_self.sql` | `83dcb6ede525033ced3ce24c1b81f6d753a27581a5a450ca9c2716f3418cf7cb` | Ikke kørt |
+
+Funktionen `provision_traderdash_free_self()` tager intet bruger-id. Den afviser en ubekræftet adresse og kalder derefter den allerede kørte funktion for `auth.uid()`. `anon` kan ikke køre den. Den kørte funktion med et vilkårligt id er uændret. Filen er ikke anvendt på Production.

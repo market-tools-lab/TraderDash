@@ -14,11 +14,11 @@ Serverkontrollen ligger i `captcha.py`. Den kalder ikke Cloudflare i test. Widge
 
 Komponenten i `captcha_component/index.html` er en isoleret Streamlit-komponent. Den kan sende tokenet til appen. Serveren skal stadig godkende token, vært og handlingen `registration`. Et manglende, ugyldigt eller genbrugt token stopper tilmeldingen. Hemmeligheden sendes ikke til browseren og skrives ikke i loggen.
 
-Den kørende pilot peger stadig på `feature/auth-email-recovery` og har ikke denne kode.
+Den allerede udgivne pilot bliver stående, indtil broen er kørt og appen senere udgives igen. Registreringen er lukket.
 
 ## Provision
 
-`provision_traderdash_free` er kørt på Production som `20261109111918`. Checksummen for filen er `4e32c4e652b6d26b2cc73cc453438fcf0867b37eb84a1d2b25edd26361babbc7`. Authenticated kan ikke kalde den. Den eksisterende Free-entitlement er uændret. Registrering er stadig lukket.
+`provision_traderdash_free` er kørt på Production som `20261109111918`. Checksummen for filen er `4e32c4e652b6d26b2cc73cc453438fcf0867b37eb84a1d2b25edd26361babbc7`. Authenticated kan ikke kalde den. Den eksisterende Free-entitlement er uændret. `provision_traderdash_free_self()` er forberedt i `20261109140000` og er ikke kørt. Registrering er stadig lukket.
 
 ## Alder og kontakt
 

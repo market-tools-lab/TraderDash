@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import unittest
 from contextlib import redirect_stderr
@@ -262,6 +263,7 @@ class RegistrationTests(unittest.TestCase):
 
     def test_free_entitlement_is_created_once_and_only_away_from_production(self):
         record = _ready()
+        record["target_ref"] = "local-test"
         record["entitlements"] = []
         calls = []
         first = registration.apply_free_entitlement(record, calls.append, repair=True)
@@ -302,6 +304,8 @@ class RegistrationTests(unittest.TestCase):
         self.assertEqual(gate["items"]["support_mailbox_operational"], "PASS")
         self.assertEqual(gate["items"]["turnstile_widget_configured"], "EXTERNAL")
         self.assertEqual(gate["items"]["entitlement_function_deployed"], "PASS")
+        self.assertEqual(gate["items"]["self_enrollment_prepared"], "PASS")
+        self.assertFalse(registration.SELF_ENROLLMENT_DEPLOYED)
         self.assertEqual(gate["items"]["pilot_branch_deployed"], "EXTERNAL")
         self.assertEqual(registration.launch_gate({}, root=ROOT)["items"]["ci_green"], "EXTERNAL")
         self.assertEqual(registration.TRADERDASH_PILOT_MINIMUM_AGE, 18)
@@ -317,6 +321,9 @@ class RegistrationTests(unittest.TestCase):
         self.assertIn("registration.ACK_VERSION", app)
         self.assertNotIn("auth_register_captcha", app)
         self.assertNotIn("repair=True", app)
+        self.assertNotIn("service_role", app)
+        self.assertIn("continue_traderdash_enrollment", app)
+        self.assertNotIn('"profile": False', app)
         legacy = app.split("def render_account_gate", 1)[1]
         self.assertIn("accounts.create_user", legacy)
         self.assertIn("Opret konto", legacy)
@@ -328,12 +335,251 @@ class RegistrationTests(unittest.TestCase):
             client.update_password("token", PASSPHRASE)
         self.assertEqual(calls, [])
 
+    def test_production_readiness_allows_one_free_signup_and_refuses_mutation(self):
+        report = registration.reconcile(_ready())
+        self.assertTrue(report["access"])
+        self.assertEqual(report["papers"], 30)
+        self.assertEqual(report["product_stage"]["source"], "signup")
+        self.assertNotIn("environment", report["findings"])
+        self.assertFalse(report["mutates"])
+        calls = []
+        with self.assertRaises(registration.RegistrationRejected) as raised:
+            registration.apply_free_entitlement(_ready(), calls.append, repair=True)
+        self.assertEqual(raised.exception.reason, "environment")
+        self.assertEqual(calls, [])
+
+    def test_wrong_project_paid_plans_and_foreign_sources_do_not_grant_access(self):
+        wrong = _ready()
+        wrong["target_ref"] = "other-project"
+        nordic = _ready()
+        nordic["entitlements"] = [
+            {"status": "active", "plan": "nordic", "product": "traderdash", "source": "subscription"}
+        ]
+        international = _ready()
+        international["entitlements"] = [
+            {"status": "active", "plan": "international", "product": "traderdash", "source": "purchase"}
+        ]
+        subscription = _ready()
+        subscription["entitlements"] = [
+            {"status": "active", "plan": "free", "product": "traderdash", "source": "subscription"}
+        ]
+        purchase = _ready()
+        purchase["entitlements"] = [
+            {"status": "active", "plan": "free", "product": "traderdash", "source": "purchase"}
+        ]
+        for record, finding in (
+            (wrong, "environment"),
+            (nordic, "unexpected_plan"),
+            (international, "unexpected_plan"),
+            (subscription, "unexpected_source"),
+            (purchase, "unexpected_source"),
+        ):
+            report = registration.reconcile(record)
+            self.assertIn(finding, report["findings"])
+            self.assertFalse(report["access"])
+            self.assertEqual(report["papers"], 0)
+
+    def test_confirmed_signup_enrolls_only_the_caller_and_drops_the_session(self):
+        secret = "session-token-should-not-leak"
+        calls = []
+        enrolled = {"done": False}
+
+        def transport(method, url, headers, body):
+            calls.append((method, url, body))
+            if url.endswith("/auth/v1/verify"):
+                self.assertEqual(body, {"type": "signup", "token_hash": "hash-1"})
+                return 200, {
+                    "access_token": secret,
+                    "refresh_token": "refresh-should-not-leak",
+                    "user": {
+                        "id": NEW_ID,
+                        "email_confirmed_at": "2026-11-09T12:00:00Z",
+                        "user_metadata": {"acknowledgement_version": registration.ACK_VERSION},
+                    },
+                }
+            if url.endswith("/rest/v1/rpc/provision_traderdash_free_self"):
+                self.assertEqual(body, {})
+                enrolled["done"] = True
+                return 204, {}
+            if "/profiles" in url:
+                return 200, [{"id": NEW_ID}]
+            if "/entitlements" in url:
+                if not enrolled["done"]:
+                    return 200, []
+                return 200, [
+                    {
+                        "status": "active",
+                        "source": "signup",
+                        "products": {"code": "traderdash"},
+                        "plans": {"code": "free"},
+                    }
+                ]
+            if url.endswith("/auth/v1/logout"):
+                return 204, {}
+            self.fail(url)
+
+        stream = StringIO()
+        with opened(), redirect_stderr(stream):
+            first = registration.complete_verification("hash-1", {"profile": False}, transport=transport)
+            second = registration.complete_verification("hash-1", {}, transport=transport)
+        self.assertTrue(first["access"])
+        self.assertTrue(second["access"])
+        self.assertEqual(first["papers"], 30)
+        self.assertEqual(first["product_stage"]["source"], "signup")
+        self.assertFalse(first["session_kept"])
+        self.assertFalse(first["mutates"])
+        rpc = [call for call in calls if call[1].endswith("/rest/v1/rpc/provision_traderdash_free_self")]
+        self.assertEqual(len(rpc), 2)
+        self.assertEqual(sum(1 for call in calls if call[1].endswith("/auth/v1/logout")), 2)
+        text = stream.getvalue()
+        self.assertNotIn(secret, text)
+        self.assertNotIn("refresh-should-not-leak", text)
+        self.assertNotIn("hash-1", text)
+        self.assertNotIn(NEW_ID, text)
+
+    def test_unconfirmed_and_foreign_projects_do_not_enroll(self):
+        calls = []
+
+        def transport(method, url, headers, body):
+            calls.append(url)
+            if url.endswith("/auth/v1/verify"):
+                return 200, {"access_token": "temp-token", "user": {"id": NEW_ID}}
+            if "provision_traderdash_free_self" in url:
+                return 403, {"message": "email not confirmed"}
+            if "/profiles" in url or "/entitlements" in url:
+                return 200, []
+            if url.endswith("/auth/v1/logout"):
+                return 204, {}
+            self.fail(url)
+
+        with opened():
+            report = registration.complete_verification("hash-1", {}, transport=transport)
+        self.assertFalse(report["access"])
+        self.assertIn("email_unconfirmed", report["findings"])
+        self.assertTrue(any("provision_traderdash_free_self" in url for url in calls))
+        preview = supabase_auth.Client(PREVIEW_URL, "test-anon-key", lambda *args: calls.append("preview"))
+        with self.assertRaises(supabase_auth.AuthError):
+            preview.enroll_self("temp-token")
+        self.assertNotIn("preview", calls)
+        other = supabase_auth.Client("https://example.supabase.co", "test-anon-key", lambda *args: calls.append("other"))
+        with self.assertRaises(supabase_auth.AuthError):
+            other.enroll_self("temp-token")
+        self.assertNotIn("other", calls)
+
+    def test_missing_entitlement_is_retried_for_the_signed_in_user_only(self):
+        calls = []
+
+        def transport(method, url, headers, body):
+            calls.append((method, url, body))
+            if "provision_traderdash_free_self" in url:
+                self.assertEqual(body, {})
+                return 204, {}
+            if "/entitlements" in url:
+                seen = len([item for item in calls if "/entitlements" in item[1]])
+                if seen == 1:
+                    return 200, []
+                return 200, [
+                    {
+                        "status": "active",
+                        "starts_at": "2020-01-01T00:00:00Z",
+                        "ends_at": None,
+                        "products": {"code": "traderdash"},
+                        "plans": {"code": "free"},
+                    }
+                ]
+            if "/profiles" in url:
+                return 200, [{"id": NEW_ID, "display_name": None}]
+            if url.endswith("/auth/v1/user"):
+                return 200, {"id": NEW_ID, "email": EMAIL}
+            self.fail(url)
+
+        session = supabase_auth.AuthSession(
+            user_id=NEW_ID,
+            email=EMAIL,
+            access_token="kept-token",
+            plan=None,
+            profile_id=NEW_ID,
+        )
+        with opened():
+            result = supabase_auth.continue_traderdash_enrollment(session, transport=transport)
+        self.assertEqual(result.plan, "free")
+        self.assertEqual(sum(1 for call in calls if "provision_traderdash_free_self" in call[1]), 1)
+        occupied = supabase_auth.AuthSession(
+            user_id=NEW_ID,
+            email=EMAIL,
+            access_token="kept-token",
+            plan=None,
+            profile_id=NEW_ID,
+        )
+
+        def occupied_transport(method, url, headers, body):
+            if "provision_traderdash_free_self" in url:
+                raise AssertionError("existing entitlement was enrolled again")
+            if "/entitlements" in url:
+                return 200, [
+                    {
+                        "status": "active",
+                        "starts_at": "2020-01-01T00:00:00Z",
+                        "ends_at": None,
+                        "products": {"code": "traderdash"},
+                        "plans": {"code": "nordic"},
+                    }
+                ]
+            if "/profiles" in url:
+                return 200, [{"id": NEW_ID}]
+            self.fail(url)
+
+        with opened():
+            left = supabase_auth.continue_traderdash_enrollment(occupied, transport=occupied_transport)
+        self.assertIs(left, occupied)
+
+    def test_existing_free_session_is_left_unchanged(self):
+        session = supabase_auth.AuthSession(
+            user_id=NEW_ID,
+            email=EMAIL,
+            access_token="kept-token",
+            plan="free",
+            profile_id=NEW_ID,
+        )
+
+        def transport(*args):
+            raise AssertionError("enrollment was called")
+
+        with opened():
+            result = supabase_auth.continue_traderdash_enrollment(session, transport=transport)
+        self.assertIs(result, session)
+
+    def test_bridge_migration_is_unapplied_and_keeps_the_broad_function_closed(self):
+        bridge_path = ROOT / "supabase" / "migrations" / "20261109140000_provision_traderdash_free_self.sql"
+        broad_path = ROOT / "supabase" / "migrations" / "20261109110000_provision_traderdash_free.sql"
+        bridge = bridge_path.read_bytes().replace(b"\r\n", b"\n")
+        broad = broad_path.read_bytes().replace(b"\r\n", b"\n")
+        digest = hashlib.sha256(bridge).hexdigest()
+        manifest = (ROOT / "docs" / "production" / "MIGRATION_MANIFEST.md").read_text(encoding="utf-8")
+        self.assertEqual(
+            hashlib.sha256(broad).hexdigest(),
+            "4e32c4e652b6d26b2cc73cc453438fcf0867b37eb84a1d2b25edd26361babbc7",
+        )
+        self.assertIn(digest, manifest)
+        self.assertIn("NOT APPLIED", bridge.decode())
+        self.assertNotIn("Production applied: YES", manifest)
+        text = bridge.decode()
+        self.assertIn("function public.provision_traderdash_free_self()", text)
+        self.assertNotIn("provision_traderdash_free_self(target", text)
+        self.assertNotIn("service_role", text)
+        component = (ROOT / "captcha_component" / "index.html").read_text(encoding="utf-8")
+        self.assertNotIn("provision_traderdash_free", component)
+        self.assertNotIn("service_role", component)
+
 
 def _ready() -> dict:
     return {
         "user_id": "",
-        "target_ref": "local-test",
+        "target_ref": account_privacy.PRODUCTION_REF,
         "confirmed": True,
         "profile": True,
-        "entitlements": [{"status": "active", "plan": "free", "product": "traderdash"}],
+        "acknowledgement_version": registration.ACK_VERSION,
+        "entitlements": [
+            {"status": "active", "plan": "free", "product": "traderdash", "source": "signup"}
+        ],
     }

@@ -686,7 +686,7 @@ def _render_signup_verification() -> None:
         _render_supabase_login()
         return
     try:
-        result = registration.complete_verification(token, {"target_ref": supabase_auth.project_ref(), "profile": False})
+        result = registration.complete_verification(token, {})
     except registration.RegistrationRejected as exc:
         st.error(str(exc))
     else:
@@ -848,6 +848,7 @@ if supabase_auth.auth_mode() == "supabase_auth":
         _clear_user_session(logout=True)
         _render_supabase_login()
         st.stop()
+    supabase_session = supabase_auth.continue_traderdash_enrollment(supabase_session)
     if supabase_session.profile_id != supabase_session.user_id:
         operations.log_event("ENTITLEMENT_FAILURE", where="profile")
         st.error("Kontoen er ikke klar.")
