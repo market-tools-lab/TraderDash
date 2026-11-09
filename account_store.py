@@ -472,12 +472,18 @@ def _open_postgres(url: str):
     try:
         connection = psycopg.connect(url, **kwargs)
     except Exception as exc:
+        from operations import log_event
+
+        log_event("DATABASE_FAILURE", reason="connect")
         raise AccountConfigError(SAFE_DB_MESSAGE) from exc
     try:
         connection.execute("SELECT user_id FROM users LIMIT 0")
         connection.execute("SELECT stripe_event_id FROM stripe_events LIMIT 0")
         connection.rollback()
     except Exception as exc:
+        from operations import log_event
+
+        log_event("DATABASE_FAILURE", reason="schema")
         connection.close()
         raise AccountConfigError(SCHEMA_MESSAGE) from exc
     return connection

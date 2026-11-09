@@ -72,6 +72,9 @@ def plan_deletion(account: Mapping[str, Any]) -> dict[str, Any]:
 def apply_deletion(account: Mapping[str, Any], *, confirmation: str = "") -> None:
     """Refuse every deletion. The record is not modified."""
     plan_deletion(account)
+    from operations import log_event
+
+    log_event("ACCOUNT_LIFECYCLE_BLOCKED", reason="execution_disabled")
     raise LifecycleRejected("execution_disabled")
 
 
