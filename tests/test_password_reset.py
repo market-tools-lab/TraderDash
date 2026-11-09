@@ -193,16 +193,47 @@ class ResetFlowTests(unittest.TestCase):
             "next_password": PASSPHRASE,
             "next_confirmation": PASSPHRASE,
         }
-        with patch.dict(os.environ, ENV):
+        pilot = dict(ENV, TRADERDASH_SUPABASE_URL=PRODUCTION_URL)
+        with patch.dict(os.environ, pilot):
             with self.assertRaises(supabase_auth.AuthError):
                 supabase_auth.change_password("session-token", PASSPHRASE, "different-secret", transport=transport)
             supabase_auth.change_password("session-token", PASSPHRASE, PASSPHRASE, transport=transport)
             supabase_auth.sign_out_all_supported_sessions(state, transport=transport)
         self.assertEqual(calls[0][0], "PUT")
-        self.assertIn("/auth/v1/user", calls[0][1])
+        self.assertIn(PRODUCTION_URL + "/auth/v1/user", calls[0][1])
+        self.assertNotIn("ajbsoudovxstlolojvte", calls[0][1])
         self.assertIn("scope=global", calls[1][1])
+        self.assertNotIn("ajbsoudovxstlolojvte", calls[1][1])
         self.assertNotIn("next_password", state)
         self.assertNotIn(supabase_auth.TOKEN_KEY, state)
+
+    def test_deleted_preview_is_not_a_password_change_target(self):
+        def transport(method, url, headers, body):
+            raise AssertionError("request was sent")
+
+        with patch.dict(os.environ, ENV):
+            with self.assertRaises(supabase_auth.AuthError) as raised:
+                supabase_auth.change_password("session-token", PASSPHRASE, PASSPHRASE, transport=transport)
+        self.assertNotIn(PASSPHRASE, str(raised.exception))
+        self.assertNotIn("ajbsoudovxstlolojvte", str(raised.exception))
+
+    def test_short_password_and_missing_session_do_not_call_the_pilot(self):
+        def transport(method, url, headers, body):
+            raise AssertionError("request was sent")
+
+        pilot = dict(ENV, TRADERDASH_SUPABASE_URL=PRODUCTION_URL)
+        with patch.dict(os.environ, pilot):
+            with self.assertRaises(supabase_auth.AuthError) as raised:
+                supabase_auth.change_password("session-token", "short-pass", "short-pass", transport=transport)
+            self.assertNotIn("short-pass", str(raised.exception))
+            with self.assertRaises(supabase_auth.AuthError):
+                supabase_auth.change_password("", PASSPHRASE, PASSPHRASE, transport=transport)
+
+    def test_legacy_gate_does_not_offer_password_change(self):
+        source = (ROOT / "app.py").read_text(encoding="utf-8")
+        legacy = source.split("def render_account_gate", 1)[1]
+        self.assertNotIn("Skift adgangskode", legacy)
+        self.assertNotIn("Slet konto", source)
 
     def test_legacy_login_does_not_gain_the_reset_form(self):
         source = (ROOT / "app.py").read_text(encoding="utf-8")

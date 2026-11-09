@@ -212,7 +212,7 @@ def change_password(token: str, new_password: str, confirmation: str, *, transpo
 
 
 def sign_out_all_supported_sessions(state: MutableMapping[str, Any], *, transport=None) -> None:
-    """End every Auth session this preview flow can reach, then clear the local copy."""
+    """End every Auth session on the configured project, then clear the local copy."""
     token = str(state.get(TOKEN_KEY) or "")
     clear_local(state)
     forget_password(state)
@@ -424,7 +424,7 @@ class Client:
         self._request("POST", "/auth/v1/logout", token=token)
 
     def logout_all(self, token: str) -> None:
-        self._require_preview()
+        self._refuse_deleted_preview()
         self._request("POST", "/auth/v1/logout?scope=global", token=token)
 
     def request_password_reset(self, email: str, redirect_url: str) -> None:
@@ -473,7 +473,8 @@ class Client:
             raise AuthError("Adgangskoden kunne ikke opdateres.")
 
     def update_password(self, token: str, new_password: str) -> None:
-        self._require_preview()
+        """Change the password for the current session on the configured project."""
+        self._refuse_deleted_preview()
         if not str(token or "").strip():
             raise AuthError("Nulstillingen er ikke gyldig.")
         try:
@@ -486,9 +487,10 @@ class Client:
         if status != 200:
             raise AuthError("Adgangskoden kunne ikke opdateres.")
 
-    def _require_preview(self) -> None:
-        if self.base_url.rstrip("/") != PREVIEW_ORIGIN:
-            raise AuthError("Nulstilling kan ikke sendes.")
+    def _refuse_deleted_preview(self) -> None:
+        """The deleted preview project is not a valid Auth target."""
+        if self.base_url.rstrip("/") == PREVIEW_ORIGIN:
+            raise AuthError("Adgangskoden kunne ikke opdateres.")
 
     def _session(self, token: str, user_id: str, email: str) -> AuthSession:
         profile_status, profiles = self._request(

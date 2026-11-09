@@ -32,6 +32,7 @@ Repositoriet er den versionerede tekniske dokumentation. Hemmelige værdier ligg
 | `docs/production/MAIL_PROVIDER_DECISION.md` | Resend er valgt og prøvet |
 | `docs/production/email/` | Kladder. Nulstillingssedlen er den, prøven brugte |
 | `docs/production/DISASTER_RECOVERY.md` | Gendannelse. Ingen hemmeligheder og ingen kørsel mod Production |
+| `docs/production/ACCOUNT_LIFECYCLE.md` | Kontolivscyklus. Sletning er ikke slået til |
 
 ## Uden for mergen
 
