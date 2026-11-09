@@ -8,7 +8,7 @@ Registrering er lukket. Denne tekst åbner den ikke. Ingen mail er sendt, ingen 
 
 `TRADERDASH_AUTH_REGISTRATION=enabled` er den eneste værdi, der gør koden klar. Manglende værdi, `disabled` og enhver anden tekst er lukket. Legacy læser ikke flaget. `traderdash-market` beholder sin egen `Opret konto`.
 
-Koden er ikke nok. Et kald kræver også `supabase_auth`, begge leveringskontakter, en allowlistet redirect og et ikke-tomt CAPTCHA-token. Den forberedte formular har ikke et CAPTCHA-felt, så den kan ikke sende et kald, selv hvis flaget senere sættes.
+Koden er ikke nok. Et kald kræver også `supabase_auth`, begge leveringskontakter, en allowlistet redirect og et token, som serveren har godkendt. Uden det token sender formularen ikke et Auth-kald.
 
 Sundhedstjekket bliver `not_ready`, hvis flaget er `enabled` eller en ukendt værdi. Det er et driftssignal.
 
@@ -47,4 +47,4 @@ Launch-listen i `registration.launch_gate` bliver ved med at svare `closed`. Den
 
 Lukning er at fjerne `TRADERDASH_AUTH_REGISTRATION` eller sætte den til `disabled`. Legacy-appen kræver ingen ændring.
 
-Serverkontrollen af Turnstile og funktionen `provision_traderdash_free` er forberedt på en senere branch. De ændrer ikke denne lukkede standard.
+Serverkontrollen af Turnstile og funktionen `provision_traderdash_free` er forberedt på `feature/public-pilot-finalization`. De ændrer ikke denne lukkede standard. Widgettet er oprettet eksternt. Tokenet kan returneres fra en isoleret komponent, og serveren skal stadig godkende det.

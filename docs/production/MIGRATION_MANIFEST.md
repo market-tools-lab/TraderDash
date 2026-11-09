@@ -83,3 +83,5 @@ Appens rollback er `TRADERDASH_AUTH_MODE=legacy` eller en fjernet variabel. Clou
 | 3 | `supabase/migrations/20261109110000_provision_traderdash_free.sql` | `4e32c4e652b6d26b2cc73cc453438fcf0867b37eb84a1d2b25edd26361babbc7` | Ikke kørt. Må ikke køres uden en senere GO |
 
 Funktionen giver én Free-entitlement til TraderDash, når en betroet rolle kalder den. Den ændrer ikke en eksisterende aktiv entitlement. `anon` og `authenticated` har ikke execute.
+
+Teksten er uændret efter token-returen 9. november 2026. Checksummen gælder stadig. Production er ikke kørt.

@@ -39,6 +39,8 @@ Repositoriet er den versionerede tekniske dokumentation. Hemmelige værdier ligg
 | `docs/production/PRIVACY_NOTICE.md` | Udkast til privatlivsnotits |
 | `docs/production/TERMS_OF_USE.md` | Udkast til pilotvilkår |
 | `docs/production/PUBLIC_PILOT.md` | Pilotdrift. Registrering er lukket |
+| `docs/production/SUPPORT_MAIL.md` | Krav til supportmail. Indbakken er ikke i drift |
+| `captcha_component/index.html` | Isoleret Turnstile-komponent. Hemmeligheden ligger ikke her |
 
 ## Uden for mergen
 
@@ -61,4 +63,4 @@ Ingen hemmelighed står her. Ingen adgangskode, intet token og ingen SMTP-nøgle
 
 Supabase Auth ejer linket og sender mailen over SMTP. Appen kalder `POST /auth/v1/recover` med en allowlistet `redirect_to`. `token_hash` lander på piloten. Appen verificerer, sætter adgangskoden og dropper sessionen. Den fulde URL gemmes ikke.
 
-Kontaktnavne, uden værdier: `TRADERDASH_AUTH_MODE`, `TRADERDASH_SUPABASE_URL`, `TRADERDASH_SUPABASE_ANON_KEY`, `TRADERDASH_PASSWORD_RECOVERY`, `TRADERDASH_AUTH_EMAIL_DELIVERY`, `TRADERDASH_AUTH_REDIRECT_URL`, `TRADERDASH_AUTH_REDIRECT_ALLOWLIST`.
+Kontaktnavne, uden værdier: `TRADERDASH_AUTH_MODE`, `TRADERDASH_SUPABASE_URL`, `TRADERDASH_SUPABASE_ANON_KEY`, `TRADERDASH_PASSWORD_RECOVERY`, `TRADERDASH_AUTH_EMAIL_DELIVERY`, `TRADERDASH_AUTH_REDIRECT_URL`, `TRADERDASH_AUTH_REDIRECT_ALLOWLIST`, `TRADERDASH_TURNSTILE_SITE_KEY`, `TRADERDASH_TURNSTILE_SECRET_KEY`.
