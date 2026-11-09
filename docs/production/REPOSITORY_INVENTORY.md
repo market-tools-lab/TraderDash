@@ -31,6 +31,7 @@ Repositoriet er den versionerede tekniske dokumentation. Hemmelige værdier ligg
 | `docs/production/AUTH_EMAIL_RECOVERY.md` | Nulstilling med `token_hash`. Én prøve er gennemført |
 | `docs/production/MAIL_PROVIDER_DECISION.md` | Resend er valgt og prøvet |
 | `docs/production/email/` | Kladder. Nulstillingssedlen er den, prøven brugte |
+| `docs/production/DISASTER_RECOVERY.md` | Gendannelse. Ingen hemmeligheder og ingen kørsel mod Production |
 
 ## Uden for mergen
 
