@@ -141,6 +141,18 @@ class AppAuthFlowTests(unittest.TestCase):
         self.assertIn("Ny konto oprettes ikke", _texts(at))
         self.assertEqual(at.exception, [])
 
+    def test_recovery_link_is_discarded_while_email_delivery_is_off(self):
+        at = AppTest.from_file(APP, default_timeout=30)
+        at.query_params["token_hash"] = "hash-should-not-remain"
+        at.query_params["type"] = "recovery"
+        at.query_params["code"] = "code-should-not-remain"
+        at.run()
+        self.assertIn(supabase_auth.RESET_INVALID, _texts(at))
+        self.assertNotIn("hash-should-not-remain", _texts(at))
+        self.assertNotIn("code-should-not-remain", str(dict(at.session_state)))
+        self.assertNotIn("Gem ny adgangskode", [button.label for button in at.button])
+        self.assertNotIn("token_hash", list(at.query_params))
+
     def test_wrong_login_is_neutral_and_keeps_no_secret(self):
         at = _login(_boot(), "free@example.invalid", "wrong-password-value")
         self.assertIn("Forkert e-mail eller adgangskode.", _texts(at))

@@ -546,8 +546,10 @@ def build_chart(history: pd.DataFrame, indicator_rsi: pd.Series, indicator_macd:
 _SAFE_AUTH_MESSAGES = {
     "Supabase Auth er ikke konfigureret.",
     "Supabase Auth er ikke tilgængelig.",
-    "Nulstilling kan ikke sendes.",
-    "Nulstillingen er ikke gyldig.",
+    supabase_auth.RESET_UNAVAILABLE,
+    supabase_auth.RESET_INVALID,
+    supabase_auth.INVALID_EMAIL,
+    supabase_auth.RESET_COOLDOWN,
     "Adgangskoden kunne ikke opdateres.",
     "Adgangskoderne er ikke ens.",
     "Adgangskoden skal være mellem 12 og 128 tegn.",
@@ -581,6 +583,9 @@ def _logout() -> None:
 
 
 def _render_supabase_login() -> None:
+    notice = st.session_state.pop("_recovery_notice", "")
+    if notice == supabase_auth.RECOVERY_DONE:
+        st.info(notice)
     with st.form("login"):
         email = st.text_input("E-mail", key="login_email")
         password = st.text_input("Adgangskode", type="password", key="login_password")
@@ -615,7 +620,11 @@ def _render_supabase_reset() -> None:
         submitted = st.form_submit_button("Send nulstillingslink")
     if submitted:
         try:
-            supabase_auth.request_password_reset(email, supabase_auth.PREVIEW_ORIGIN)
+            supabase_auth.request_password_reset(
+                email,
+                supabase_auth.configured_redirect(),
+                state=st.session_state,
+            )
         except supabase_auth.AuthError as exc:
             st.error(_auth_notice(exc))
         except Exception:
@@ -623,6 +632,50 @@ def _render_supabase_reset() -> None:
         else:
             st.info(supabase_auth.RESET_MESSAGE)
         supabase_auth.forget_password(st.session_state)
+
+
+def _render_supabase_recovery() -> None:
+    token = str(st.session_state.get(supabase_auth.RECOVERY_TOKEN_KEY) or "")
+    if not token:
+        try:
+            token = supabase_auth.take_recovery_token(st.query_params)
+        except supabase_auth.AuthError as exc:
+            supabase_auth.discard_recovery_query(st.query_params)
+            st.error(_auth_notice(exc))
+            _render_supabase_login()
+            return
+        supabase_auth.discard_recovery_query(st.query_params)
+        if not token:
+            _render_supabase_login()
+            return
+        st.session_state[supabase_auth.RECOVERY_TOKEN_KEY] = token
+    st.subheader("Ny adgangskode")
+    st.caption("Linket virker kun i kort tid. Bed om et nyt, hvis det er udløbet.")
+    with st.form("recovery_password"):
+        new_password = st.text_input("Ny adgangskode", type="password", key="recovery_password")
+        confirmation = st.text_input("Gentag ny adgangskode", type="password", key="recovery_confirmation")
+        submitted = st.form_submit_button("Gem ny adgangskode")
+    if not submitted:
+        return
+    try:
+        supabase_auth.complete_recovery(
+            token,
+            new_password,
+            confirmation,
+            state=st.session_state,
+        )
+    except supabase_auth.AuthError as exc:
+        st.error(_auth_notice(exc))
+        if str(exc) == supabase_auth.RESET_INVALID:
+            supabase_auth.clear_recovery(st.session_state)
+        else:
+            supabase_auth.forget_password(st.session_state)
+    except Exception:
+        supabase_auth.clear_recovery(st.session_state)
+        st.error("Supabase Auth er ikke tilgængelig.")
+    else:
+        st.session_state["_recovery_notice"] = supabase_auth.RECOVERY_DONE
+        st.rerun()
 
 
 def _render_supabase_password_change() -> None:
@@ -710,6 +763,9 @@ if supabase_auth.auth_mode() != "supabase_auth" and (
     st.stop()
 
 if supabase_auth.auth_mode() == "supabase_auth":
+    if supabase_auth.recovery_link_present(st.query_params) or st.session_state.get(supabase_auth.RECOVERY_TOKEN_KEY):
+        _render_supabase_recovery()
+        st.stop()
     try:
         supabase_session = supabase_auth.load_saved_session(st.session_state)
     except supabase_auth.AuthError as exc:
@@ -735,6 +791,7 @@ else:
         st.error(str(exc))
         st.stop()
     if signed_in is None:
+        supabase_auth.discard_recovery_query(st.query_params)
         _clear_user_session(logout=True)
         render_account_gate()
         st.stop()

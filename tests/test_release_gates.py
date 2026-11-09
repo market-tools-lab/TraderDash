@@ -32,6 +32,10 @@ class ReleaseGateTests(unittest.TestCase):
         self.assertNotIn("Slet konto", app)
         self.assertNotIn("account_privacy", app)
         self.assertNotIn("stripe_test", app)
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("TRADERDASH_PASSWORD_RECOVERY", None)
+            os.environ.pop("TRADERDASH_AUTH_EMAIL_DELIVERY", None)
+            self.assertFalse(supabase_auth.delivery_enabled())
 
     def test_stripe_and_privacy_stay_closed(self):
         self.assertFalse(stripe_test.ENTITLEMENT_UPDATES_ENABLED)
