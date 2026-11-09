@@ -34,6 +34,7 @@ Repositoriet er den versionerede tekniske dokumentation. Hemmelige værdier ligg
 | `docs/production/DISASTER_RECOVERY.md` | Gendannelse. Ingen hemmeligheder og ingen kørsel mod Production |
 | `docs/production/ACCOUNT_LIFECYCLE.md` | Kontolivscyklus. Sletning er ikke slået til |
 | `docs/production/OPERATIONS.md` | Drift og lokale sundhedstjek. Ingen ekstern betalingstjeneste |
+| `docs/production/PUBLIC_REGISTRATION.md` | Registrering er forberedt og lukket |
 
 ## Uden for mergen
 
