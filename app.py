@@ -11,6 +11,7 @@ import streamlit as st
 import access
 import account_page
 import accounts
+import operations
 import supabase_auth
 from market_data import describe_freshness, get_history, get_quote
 
@@ -595,9 +596,11 @@ def _render_supabase_login() -> None:
         try:
             session = supabase_auth.sign_in(email, password)
         except supabase_auth.AuthError as exc:
+            operations.log_event("AUTH_FAILURE", where="login")
             st.error(_auth_notice(exc))
             rejected = True
         except Exception:
+            operations.log_event("UNHANDLED_APPLICATION_ERROR", where="login")
             st.error("Supabase Auth er ikke tilgængelig.")
             rejected = True
         else:
@@ -626,8 +629,10 @@ def _render_supabase_reset() -> None:
                 state=st.session_state,
             )
         except supabase_auth.AuthError as exc:
+            operations.log_event("AUTH_FAILURE", where="recovery")
             st.error(_auth_notice(exc))
         except Exception:
+            operations.log_event("UNHANDLED_APPLICATION_ERROR", where="recovery")
             st.error("Supabase Auth er ikke tilgængelig.")
         else:
             st.info(supabase_auth.RESET_MESSAGE)
@@ -640,6 +645,7 @@ def _render_supabase_recovery() -> None:
         try:
             token = supabase_auth.take_recovery_token(st.query_params)
         except supabase_auth.AuthError as exc:
+            operations.log_event("AUTH_FAILURE", where="recovery_form")
             supabase_auth.discard_recovery_query(st.query_params)
             st.error(_auth_notice(exc))
             _render_supabase_login()
@@ -665,12 +671,14 @@ def _render_supabase_recovery() -> None:
             state=st.session_state,
         )
     except supabase_auth.AuthError as exc:
+        operations.log_event("AUTH_FAILURE", where="recovery_complete")
         st.error(_auth_notice(exc))
         if str(exc) == supabase_auth.RESET_INVALID:
             supabase_auth.clear_recovery(st.session_state)
         else:
             supabase_auth.forget_password(st.session_state)
     except Exception:
+        operations.log_event("UNHANDLED_APPLICATION_ERROR", where="recovery_complete")
         supabase_auth.clear_recovery(st.session_state)
         st.error("Supabase Auth er ikke tilgængelig.")
     else:
@@ -691,8 +699,10 @@ def _render_supabase_password_change() -> None:
                 confirmation,
             )
         except supabase_auth.AuthError as exc:
+            operations.log_event("AUTH_FAILURE", where="password_change")
             st.error(_auth_notice(exc))
         except Exception:
+            operations.log_event("UNHANDLED_APPLICATION_ERROR", where="password_change")
             st.error("Supabase Auth er ikke tilgængelig.")
         else:
             supabase_auth.sign_out_all_supported_sessions(st.session_state)
@@ -769,9 +779,11 @@ if supabase_auth.auth_mode() == "supabase_auth":
     try:
         supabase_session = supabase_auth.load_saved_session(st.session_state)
     except supabase_auth.AuthError as exc:
+        operations.log_event("AUTH_FAILURE", where="session")
         st.error(_auth_notice(exc))
         st.stop()
     except Exception:
+        operations.log_event("UNHANDLED_APPLICATION_ERROR", where="session")
         st.error("Supabase Auth er ikke tilgængelig.")
         st.stop()
     if supabase_session is None:
@@ -779,6 +791,7 @@ if supabase_auth.auth_mode() == "supabase_auth":
         _render_supabase_login()
         st.stop()
     if supabase_session.profile_id != supabase_session.user_id:
+        operations.log_event("ENTITLEMENT_FAILURE", where="profile")
         st.error("Kontoen er ikke klar.")
         if st.button("Log ud", key="profile_logout"):
             _logout()
@@ -905,6 +918,7 @@ with single_tab:
                 history = load_history(symbol, period)
                 quote = {} if history.empty or len(history) < MACD_SLOW + MACD_SIGNAL else load_quote(symbol)
             except Exception:
+                operations.log_event("UNHANDLED_APPLICATION_ERROR", where="market_data")
                 fetch_failed = True
                 st.error("Kursdata er midlertidigt utilgængelige. Prøv igen om et øjeblik.")
                 history = pd.DataFrame()
@@ -960,6 +974,7 @@ with watch_tab:
                     history_ready = not item_history.empty and len(item_history) >= MACD_SLOW + MACD_SIGNAL
                     item_quote = load_quote(code) if history_ready else {}
                 except Exception:
+                    operations.log_event("UNHANDLED_APPLICATION_ERROR", where="watchlist")
                     item_history = pd.DataFrame()
                     item_quote = {}
                     history_ready = False

@@ -61,6 +61,12 @@ class AuthError(Exception):
     """A safe message for a missing setting or an unreachable Auth service."""
 
 
+def _ops(category: str, **fields) -> None:
+    from operations import log_event
+
+    log_event(category, **fields)
+
+
 def auth_mode() -> str:
     """Return legacy unless the operator explicitly selects Supabase Auth."""
     value = os.environ.get("TRADERDASH_AUTH_MODE", "").strip().lower()
@@ -389,6 +395,7 @@ class Client:
         base_url = os.environ.get("TRADERDASH_SUPABASE_URL", "").strip()
         anon_key = os.environ.get("TRADERDASH_SUPABASE_ANON_KEY", "").strip()
         if not base_url or not anon_key:
+            _ops("CONFIG_ERROR", where="supabase")
             raise AuthError("Supabase Auth er ikke konfigureret.")
         return cls(base_url, anon_key, transport)
 
@@ -437,9 +444,11 @@ class Client:
             {"email": str(email or "").strip()},
         )
         if status >= 500:
+            _ops("AUTH_FAILURE", reason="recovery")
             raise AuthError("Supabase Auth er ikke tilgængelig.")
         if status == 429:
             raise AuthError(RESET_UNAVAILABLE)
+        _ops("AUTH_RECOVERY_REQUEST")
 
     def exchange_recovery(self, token_hash: str) -> str:
         """Exchange a recovery token hash for an access token. The refresh token is discarded."""
@@ -586,6 +595,7 @@ def _urllib_transport(method: str, url: str, headers: Mapping[str, str], body: M
     except urllib.error.HTTPError as exc:
         return exc.code, _decode(exc.read())
     except (urllib.error.URLError, TimeoutError):
+        _ops("AUTH_FAILURE", reason="unreachable")
         raise AuthError("Supabase Auth er ikke tilgængelig.") from None
 
 

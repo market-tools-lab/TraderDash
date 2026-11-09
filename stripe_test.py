@@ -71,6 +71,9 @@ def apply_event(
     if not _signature_ok(raw, header, secret, now):
         return _finish(ledger, before, ApplyResult(False, False, "bad_signature"))
     if not updates_enabled:
+        from operations import log_event
+
+        log_event("STRIPE_DISABLED_ATTEMPT")
         return _finish(ledger, before, ApplyResult(False, False, "updates_disabled"))
     try:
         event = json.loads(raw)
