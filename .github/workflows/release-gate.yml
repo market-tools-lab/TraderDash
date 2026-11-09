@@ -24,6 +24,6 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Compile application modules
-        run: python -m compileall -q app.py supabase_auth.py accounts.py account_store.py account_privacy.py account_lifecycle.py registration.py operations.py stripe_test.py access.py plans.py universes.py
+        run: python -m compileall -q app.py supabase_auth.py accounts.py account_store.py account_privacy.py account_lifecycle.py registration.py captcha.py operations.py stripe_test.py access.py plans.py universes.py
       - name: Run the test suite
         run: python -m unittest discover -s tests

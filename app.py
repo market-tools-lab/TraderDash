@@ -11,6 +11,7 @@ import streamlit as st
 import access
 import account_page
 import accounts
+import captcha
 import operations
 import registration
 import supabase_auth
@@ -644,11 +645,16 @@ def _render_supabase_reset() -> None:
 
 
 def _render_supabase_registration() -> None:
+    if not captcha.render_widget(captcha.site_key()):
+        st.caption("Bekræftelsen er ikke sat op.")
     with st.form("auth_register"):
         email = st.text_input("E-mail", key="auth_register_email")
         password = st.text_input("Adgangskode", type="password", key="auth_register_password")
         confirmation = st.text_input("Gentag adgangskode", type="password", key="auth_register_confirmation")
-        acknowledged = st.checkbox("Jeg accepterer, at privatlivsteksten endnu er et udkast.", key="auth_register_ack")
+        acknowledged = st.checkbox(
+            "Jeg accepterer udkastet til privatlivsnotits og vilkår, version pilot-2026-11-09. Teksten er ikke en endelig politik.",
+            key="auth_register_ack",
+        )
         submitted = st.form_submit_button("Opret konto")
     if not submitted:
         return

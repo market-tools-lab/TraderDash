@@ -452,7 +452,7 @@ class Client:
 
     def signup(self, email: str, password: str, redirect_url: str, captcha_token: str) -> dict[str, Any]:
         """Create an unconfirmed Auth user. A session in the response is discarded."""
-        from registration import registration_open
+        from registration import ACK_VERSION, registration_open
 
         if self.base_url.rstrip("/") == PREVIEW_ORIGIN or not registration_open():
             raise AuthError("Kontoen kunne ikke oprettes.")
@@ -463,6 +463,7 @@ class Client:
             {
                 "email": str(email or "").strip(),
                 "password": password,
+                "data": {"acknowledgement_version": ACK_VERSION},
                 "gotrue_meta_security": {"captcha_token": str(captcha_token or "")},
             },
         )

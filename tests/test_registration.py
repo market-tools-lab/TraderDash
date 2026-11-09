@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 import account_lifecycle
 import account_privacy
+import captcha
 import operations
 import registration
 import stripe_test
@@ -33,6 +34,11 @@ OPEN = {
     "TRADERDASH_SUPABASE_ANON_KEY": "test-anon-key",
     "TRADERDASH_AUTH_REDIRECT_URL": REDIRECT,
     "TRADERDASH_AUTH_REDIRECT_ALLOWLIST": REDIRECT,
+    "TRADERDASH_TURNSTILE": "required",
+    "TRADERDASH_TURNSTILE_MODE": "test",
+    "TRADERDASH_TURNSTILE_SITE_KEY": captcha.PASS_SITE_KEY,
+    "TRADERDASH_TURNSTILE_SECRET_KEY": captcha.PASS_SECRET,
+    "TRADERDASH_TURNSTILE_HOSTNAME": "traderdash-next.streamlit.app",
 }
 
 
@@ -43,6 +49,9 @@ def opened(**extra):
 
 
 class RegistrationTests(unittest.TestCase):
+    def setUp(self):
+        captcha.reset_seen()
+
     def test_missing_disabled_and_unknown_flags_stay_closed(self):
         self.assertFalse(registration.registration_open({}))
         self.assertFalse(registration.registration_open({"TRADERDASH_AUTH_REGISTRATION": "disabled"}))
@@ -150,7 +159,7 @@ class RegistrationTests(unittest.TestCase):
                 EMAIL, PASSPHRASE, PASSPHRASE, acknowledged=True, captcha_token=TOKEN, redirect_url=REDIRECT, transport=lambda *args: (200, {"user": {}})
             )
             duplicate = registration.submit(
-                EMAIL, PASSPHRASE, PASSPHRASE, acknowledged=True, captcha_token=TOKEN, redirect_url=REDIRECT, transport=transport
+                EMAIL, PASSPHRASE, PASSPHRASE, acknowledged=True, captcha_token=TOKEN + "-2", redirect_url=REDIRECT, transport=transport
             )
         self.assertEqual(created["message"], duplicate["message"])
         self.assertEqual(duplicate["state"], "duplicate_hidden")
@@ -185,7 +194,7 @@ class RegistrationTests(unittest.TestCase):
         with opened():
             with self.assertRaises(registration.RegistrationRejected) as raised:
                 registration.submit(
-                    EMAIL, PASSPHRASE, PASSPHRASE, acknowledged=True, captcha_token=TOKEN, redirect_url="https://example.invalid", transport=transport
+                    EMAIL, PASSPHRASE, PASSPHRASE, acknowledged=True, captcha_token=TOKEN + "-redirect", redirect_url="https://example.invalid", transport=transport
                 )
         self.assertEqual(raised.exception.reason, "unavailable")
         self.assertEqual(calls, [])

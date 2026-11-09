@@ -13,12 +13,14 @@ from typing import Any, Callable, Mapping
 
 import account_lifecycle
 import account_privacy
+import captcha
 import password_policy
 import stripe_test
 import supabase_auth
 import universes
 
 APPROVED_VALUE = "enabled"
+ACK_VERSION = "pilot-2026-11-09"
 CAPTCHA_REQUIRED = True
 CAPTCHA_PROVIDER = "turnstile"
 REPAIR_ENABLED = False
@@ -102,6 +104,11 @@ def submit(
     if CAPTCHA_REQUIRED and not str(captcha_token or "").strip():
         _log("REGISTRATION_BLOCKED", reason="captcha")
         raise RegistrationRejected("captcha")
+    try:
+        captcha.verify(captcha_token, env=source)
+    except captcha.CaptchaRejected:
+        _log("REGISTRATION_BLOCKED", reason="captcha")
+        raise RegistrationRejected("captcha") from None
     if not supabase_auth.delivery_enabled() or not supabase_auth.allowed_redirect(redirect_url):
         _log("REGISTRATION_BLOCKED", reason="unavailable")
         raise RegistrationRejected("unavailable")
@@ -184,6 +191,8 @@ def reconcile(record: Mapping[str, Any]) -> dict[str, Any]:
         findings.append("environment")
     if not confirmed:
         findings.append("email_unconfirmed")
+    if confirmed and str(record.get("acknowledgement_version") or "") != ACK_VERSION:
+        findings.append("acknowledgement_missing")
     if confirmed and not profile:
         findings.append("profile_missing")
     if not confirmed and (profile or rows):
@@ -214,6 +223,16 @@ def reconcile(record: Mapping[str, Any]) -> dict[str, Any]:
         "actions": ["create_free"] if "entitlement_missing" in findings else [],
         "access": access,
         "papers": papers,
+        "account_stage": {
+            "confirmed": confirmed,
+            "acknowledgement_version": str(record.get("acknowledgement_version") or ""),
+        },
+        "product_stage": {
+            "product": "traderdash",
+            "profile": profile,
+            "free_entitlements": len(free),
+            "papers": papers,
+        },
         "mutates": False,
         "repair_enabled": REPAIR_ENABLED,
     }
@@ -248,6 +267,7 @@ def launch_gate(evidence: Mapping[str, Any] | None = None, *, root=None) -> dict
     auth = (base / "supabase_auth.py").read_text(encoding="utf-8")
     operations_doc = base / "docs" / "production" / "OPERATIONS.md"
     lifecycle_doc = base / "docs" / "production" / "ACCOUNT_LIFECYCLE.md"
+    provision = (base / "supabase" / "migrations" / "20261109110000_provision_traderdash_free.sql").read_text(encoding="utf-8")
     items = {
         "ci_green": _evidence(supplied, "ci_green"),
         "supabase_healthy": _evidence(supplied, "supabase_healthy"),
@@ -258,9 +278,15 @@ def launch_gate(evidence: Mapping[str, Any] | None = None, *, root=None) -> dict
         "registration_default_off": "PASS" if not registration_open({}) else "FAIL",
         "email_verification_prepared": "PASS",
         "captcha_decision_complete": "PASS" if CAPTCHA_REQUIRED and CAPTCHA_PROVIDER == "turnstile" else "FAIL",
+        "turnstile_server_verification": "PASS" if (base / "captcha.py").is_file() else "FAIL",
+        "turnstile_widget_configured": "FAIL",
+        "privacy_draft_present": "PASS" if (base / "docs" / "production" / "PRIVACY_NOTICE.md").is_file() else "FAIL",
+        "terms_draft_present": "PASS" if (base / "docs" / "production" / "TERMS_OF_USE.md").is_file() else "FAIL",
         "privacy_terms_decision_complete": "PASS" if LEGAL_DECISIONS_COMPLETE else "FAIL",
         "free_entitlement_idempotent": "PASS",
+        "entitlement_function_prepared": "PASS" if "revoke all on function public.provision_traderdash_free(uuid) from public, anon, authenticated;" in provision else "FAIL",
         "entitlement_function_deployed": "PASS" if ENTITLEMENT_FUNCTION_DEPLOYED else "FAIL",
+        "pilot_branch_deployed": "FAIL",
         "deletion_policy_documented": "PASS" if lifecycle_doc.is_file() else "FAIL",
         "recovery_code_present": "PASS" if "def request_password_reset" in auth else "FAIL",
         "password_change_code_ready": "PASS" if "_refuse_deleted_preview" in auth else "FAIL",
