@@ -12,6 +12,7 @@ import access
 import account_page
 import accounts
 import operations
+import registration
 import supabase_auth
 from market_data import describe_freshness, get_history, get_quote
 
@@ -613,7 +614,10 @@ def _render_supabase_login() -> None:
                 st.rerun()
         if rejected:
             supabase_auth.forget_password(st.session_state)
-    st.caption("Ny konto oprettes ikke i denne loginvej.")
+    if registration.registration_open():
+        _render_supabase_registration()
+    else:
+        st.caption("Ny konto oprettes ikke i denne loginvej.")
     _render_supabase_reset()
 
 
@@ -637,6 +641,47 @@ def _render_supabase_reset() -> None:
         else:
             st.info(supabase_auth.RESET_MESSAGE)
         supabase_auth.forget_password(st.session_state)
+
+
+def _render_supabase_registration() -> None:
+    with st.form("auth_register"):
+        email = st.text_input("E-mail", key="auth_register_email")
+        password = st.text_input("Adgangskode", type="password", key="auth_register_password")
+        confirmation = st.text_input("Gentag adgangskode", type="password", key="auth_register_confirmation")
+        acknowledged = st.checkbox("Jeg accepterer, at privatlivsteksten endnu er et udkast.", key="auth_register_ack")
+        submitted = st.form_submit_button("Opret konto")
+    if not submitted:
+        return
+    try:
+        result = registration.submit(
+            email,
+            password,
+            confirmation,
+            acknowledged=bool(acknowledged),
+            captcha_token=str(st.session_state.get("auth_register_captcha") or ""),
+            redirect_url=supabase_auth.configured_redirect(),
+        )
+    except registration.RegistrationRejected as exc:
+        st.error(str(exc))
+    else:
+        st.info(result["message"])
+    supabase_auth.forget_password(st.session_state)
+
+
+def _render_signup_verification() -> None:
+    token = str(st.query_params.get("token_hash") or "")
+    supabase_auth.discard_recovery_query(st.query_params)
+    if not registration.registration_open():
+        st.caption("Ny konto oprettes ikke i denne loginvej.")
+        _render_supabase_login()
+        return
+    try:
+        result = registration.complete_verification(token, {"target_ref": supabase_auth.project_ref(), "profile": False})
+    except registration.RegistrationRejected as exc:
+        st.error(str(exc))
+    else:
+        st.info(result["message"])
+    _render_supabase_login()
 
 
 def _render_supabase_recovery() -> None:
@@ -773,6 +818,9 @@ if supabase_auth.auth_mode() != "supabase_auth" and (
     st.stop()
 
 if supabase_auth.auth_mode() == "supabase_auth":
+    if registration.signup_link_present(st.query_params):
+        _render_signup_verification()
+        st.stop()
     if supabase_auth.recovery_link_present(st.query_params) or st.session_state.get(supabase_auth.RECOVERY_TOKEN_KEY):
         _render_supabase_recovery()
         st.stop()

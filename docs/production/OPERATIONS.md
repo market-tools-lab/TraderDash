@@ -60,3 +60,5 @@ En ny ekstern tjeneste kræver en særskilt beslutning, før den oprettes.
 ## Drift uden for denne branch
 
 Den kørende pilot peger stadig på `feature/auth-email-recovery`. Denne branch ændrer ikke Streamlit-secrets, DNS, Resend eller SMTP. Legacy-appen på master får først koden, når branchen er merget, og Community Cloud har bygget den.
+
+`TRADERDASH_AUTH_REGISTRATION` skal mangle eller være `disabled`. Værdien `enabled` gør sundhedstjekket `not_ready`.

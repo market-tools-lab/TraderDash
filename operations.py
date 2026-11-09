@@ -29,6 +29,11 @@ CATEGORIES = frozenset(
         "ENTITLEMENT_FAILURE",
         "STRIPE_DISABLED_ATTEMPT",
         "ACCOUNT_LIFECYCLE_BLOCKED",
+        "REGISTRATION_REQUEST",
+        "REGISTRATION_BLOCKED",
+        "REGISTRATION_VERIFICATION_REQUIRED",
+        "REGISTRATION_COMPLETED",
+        "REGISTRATION_RECONCILIATION_REQUIRED",
         "UNHANDLED_APPLICATION_ERROR",
     }
 )
@@ -239,6 +244,11 @@ def _blockers(source: Mapping[str, str]) -> list[str]:
         blockers.append("registration_switch")
     if str(source.get("TRADERDASH_STRIPE", "")).strip().lower() in _TRUTHY:
         blockers.append("stripe_switch")
+    registration_flag = str(source.get("TRADERDASH_AUTH_REGISTRATION", "")).strip().lower()
+    if registration_flag == "enabled":
+        blockers.append("registration_enabled")
+    elif registration_flag not in {"", "disabled"}:
+        blockers.append("registration_flag")
     if stripe_test.ENTITLEMENT_UPDATES_ENABLED:
         blockers.append("stripe_code")
     if account_lifecycle.DELETION_UI_ENABLED:
