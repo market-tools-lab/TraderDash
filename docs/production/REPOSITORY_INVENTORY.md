@@ -35,6 +35,10 @@ Repositoriet er den versionerede tekniske dokumentation. Hemmelige værdier ligg
 | `docs/production/ACCOUNT_LIFECYCLE.md` | Kontolivscyklus. Sletning er ikke slået til |
 | `docs/production/OPERATIONS.md` | Drift og lokale sundhedstjek. Ingen ekstern betalingstjeneste |
 | `docs/production/PUBLIC_REGISTRATION.md` | Registrering er forberedt og lukket |
+| `docs/production/MARKET_TOOLS_PLATFORM.md` | Platform og TraderDash-produkt |
+| `docs/production/PRIVACY_NOTICE.md` | Udkast til privatlivsnotits |
+| `docs/production/TERMS_OF_USE.md` | Udkast til pilotvilkår |
+| `docs/production/PUBLIC_PILOT.md` | Pilotdrift. Registrering er lukket |
 
 ## Uden for mergen
 

@@ -75,3 +75,11 @@ Forventet skrivetal for entitlements er 0. `public.users` må have samme rækket
 `docs/production/ROLLBACK.sql` er ikke kørt. Den sletter ikke `public.users` og ikke `auth.users`. En restore fra backup er den foretrukne vej, hvis rækker allerede er migreret. Drop-scriptet er kun til et katalog, der endnu ikke har piloter.
 
 Appens rollback er `TRADERDASH_AUTH_MODE=legacy` eller en fjernet variabel. Cloud sættes ikke i denne iteration.
+
+## Ikke kørt
+
+| Rækkefølge | Fil | SHA-256 af LF-teksten | Production |
+| --- | --- | --- | --- |
+| 3 | `supabase/migrations/20261109110000_provision_traderdash_free.sql` | `4e32c4e652b6d26b2cc73cc453438fcf0867b37eb84a1d2b25edd26361babbc7` | Ikke kørt. Må ikke køres uden en senere GO |
+
+Funktionen giver én Free-entitlement til TraderDash, når en betroet rolle kalder den. Den ændrer ikke en eksisterende aktiv entitlement. `anon` og `authenticated` har ikke execute.
