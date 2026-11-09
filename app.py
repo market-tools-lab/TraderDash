@@ -645,14 +645,18 @@ def _render_supabase_reset() -> None:
 
 
 def _render_supabase_registration() -> None:
-    if not captcha.render_widget(captcha.site_key()):
+    token = captcha.render_widget(captcha.site_key())
+    if token is None:
         st.caption("Bekræftelsen er ikke sat op.")
+        token = ""
     with st.form("auth_register"):
         email = st.text_input("E-mail", key="auth_register_email")
         password = st.text_input("Adgangskode", type="password", key="auth_register_password")
         confirmation = st.text_input("Gentag adgangskode", type="password", key="auth_register_confirmation")
         acknowledged = st.checkbox(
-            "Jeg accepterer udkastet til privatlivsnotits og vilkår, version pilot-2026-11-09. Teksten er ikke en endelig politik.",
+            "Jeg bekræfter, at jeg er fyldt 18 år og må deltage i TraderDash-piloten. "
+            f"Jeg accepterer udkastet til privatlivsnotits og vilkår, version {registration.ACK_VERSION}. "
+            "Teksten er ikke en endelig politik.",
             key="auth_register_ack",
         )
         submitted = st.form_submit_button("Opret konto")
@@ -664,7 +668,7 @@ def _render_supabase_registration() -> None:
             password,
             confirmation,
             acknowledged=bool(acknowledged),
-            captcha_token=str(st.session_state.get("auth_register_captcha") or ""),
+            captcha_token=token,
             redirect_url=supabase_auth.configured_redirect(),
         )
     except registration.RegistrationRejected as exc:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 import captcha
 
@@ -89,10 +90,49 @@ class CaptchaTests(unittest.TestCase):
             captcha.verify("ok-token", env=LIVE, transport=transport)
         self.assertNotIn("live-secret", str(raised.exception))
 
-    def test_widget_markup_keeps_the_secret_out(self):
-        markup = captcha.widget_markup(captcha.PASS_SITE_KEY)
-        self.assertIn(captcha.PASS_SITE_KEY, markup)
-        self.assertIn("registration", markup)
-        self.assertNotIn(captcha.PASS_SECRET, markup)
-        self.assertEqual(captcha.widget_markup('"><script>'), "")
-        self.assertEqual(captcha.widget_markup(captcha.PASS_SECRET), "")
+    def test_widget_returns_a_token_and_keeps_the_secret_out(self):
+        calls = []
+
+        def component(sitekey, action):
+            calls.append((sitekey, action))
+            return "a" * 20
+
+        token = captcha.render_widget(
+            captcha.PASS_SITE_KEY,
+            env={"TRADERDASH_TURNSTILE_MODE": "test"},
+            component=component,
+        )
+        self.assertEqual(token, "a" * 20)
+        self.assertEqual(calls, [(captcha.PASS_SITE_KEY, "registration")])
+        self.assertIsNone(captcha.render_widget('"><script>', component=component))
+        self.assertIsNone(captcha.render_widget(captcha.PASS_SECRET, component=component))
+        self.assertIsNone(
+            captcha.render_widget(
+                captcha.PASS_SITE_KEY,
+                env={"TRADERDASH_ENV": "production", "TRADERDASH_TURNSTILE_MODE": "live"},
+                component=component,
+            )
+        )
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(
+            captcha.render_widget(
+                captcha.PASS_SITE_KEY,
+                env={"TRADERDASH_TURNSTILE_MODE": "test"},
+                component=lambda *_args: "short",
+            ),
+            "",
+        )
+        self.assertEqual(
+            captcha.render_widget(
+                captcha.PASS_SITE_KEY,
+                env={"TRADERDASH_TURNSTILE_MODE": "test"},
+                component=lambda *_args: {"token": "a" * 20},
+            ),
+            "",
+        )
+        page = (Path(__file__).resolve().parents[1] / "captcha_component" / "index.html").read_text(encoding="utf-8")
+        self.assertIn("streamlit:setComponentValue", page)
+        self.assertIn('var ACTION = "registration"', page)
+        self.assertIn("event.source !== window.parent", page)
+        self.assertNotIn(captcha.PASS_SECRET, page)
+        self.assertNotIn("TRADERDASH_TURNSTILE_SECRET_KEY", page)

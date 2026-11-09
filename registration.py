@@ -20,7 +20,8 @@ import supabase_auth
 import universes
 
 APPROVED_VALUE = "enabled"
-ACK_VERSION = "pilot-2026-11-09"
+ACK_VERSION = "traderdash-pilot-2026-11-09"
+TRADERDASH_PILOT_MINIMUM_AGE = 18
 CAPTCHA_REQUIRED = True
 CAPTCHA_PROVIDER = "turnstile"
 REPAIR_ENABLED = False
@@ -268,29 +269,38 @@ def launch_gate(evidence: Mapping[str, Any] | None = None, *, root=None) -> dict
     operations_doc = base / "docs" / "production" / "OPERATIONS.md"
     lifecycle_doc = base / "docs" / "production" / "ACCOUNT_LIFECYCLE.md"
     provision = (base / "supabase" / "migrations" / "20261109110000_provision_traderdash_free.sql").read_text(encoding="utf-8")
+    component = (base / "captcha_component" / "index.html").read_text(encoding="utf-8")
+    platform = (base / "docs" / "production" / "MARKET_TOOLS_PLATFORM.md").read_text(encoding="utf-8")
+    terms = (base / "docs" / "production" / "TERMS_OF_USE.md").read_text(encoding="utf-8")
+    pilot = (base / "docs" / "production" / "PUBLIC_PILOT.md").read_text(encoding="utf-8")
     items = {
-        "ci_green": _evidence(supplied, "ci_green"),
-        "supabase_healthy": _evidence(supplied, "supabase_healthy"),
-        "no_preview_branch": _evidence(supplied, "no_preview_branch"),
-        "backups_current": _evidence(supplied, "backups_current"),
-        "resend_healthy": _evidence(supplied, "resend_healthy"),
-        "registration_code_tested": _evidence(supplied, "registration_code_tested"),
+        "ci_green": _external(supplied, "ci_green"),
+        "supabase_healthy": _external(supplied, "supabase_healthy"),
+        "no_preview_branch": _external(supplied, "no_preview_branch"),
+        "backups_current": _external(supplied, "backups_current"),
+        "resend_healthy": _external(supplied, "resend_healthy"),
+        "registration_code_tested": _external(supplied, "registration_code_tested"),
         "registration_default_off": "PASS" if not registration_open({}) else "FAIL",
         "email_verification_prepared": "PASS",
         "captcha_decision_complete": "PASS" if CAPTCHA_REQUIRED and CAPTCHA_PROVIDER == "turnstile" else "FAIL",
-        "turnstile_server_verification": "PASS" if (base / "captcha.py").is_file() else "FAIL",
-        "turnstile_widget_configured": "FAIL",
+        "turnstile_server_verification": "PASS" if "def verify" in (base / "captcha.py").read_text(encoding="utf-8") else "FAIL",
+        "turnstile_token_return": "PASS" if _token_return_ready(component) else "FAIL",
+        "turnstile_widget_configured": _external(supplied, "turnstile_widget_configured"),
         "privacy_draft_present": "PASS" if (base / "docs" / "production" / "PRIVACY_NOTICE.md").is_file() else "FAIL",
         "terms_draft_present": "PASS" if (base / "docs" / "production" / "TERMS_OF_USE.md").is_file() else "FAIL",
-        "privacy_terms_decision_complete": "PASS" if LEGAL_DECISIONS_COMPLETE else "FAIL",
+        "traderdash_age_policy": "PASS" if _age_policy_ready(platform, terms) else "FAIL",
+        "privacy_terms_decision_complete": _external(supplied, "privacy_terms_decision_complete") if not LEGAL_DECISIONS_COMPLETE else "PASS",
+        "support_requirements_documented": "PASS" if (base / "docs" / "production" / "SUPPORT_MAIL.md").is_file() else "FAIL",
+        "support_mailbox_operational": _external(supplied, "support_mailbox_operational"),
         "free_entitlement_idempotent": "PASS",
         "entitlement_function_prepared": "PASS" if "revoke all on function public.provision_traderdash_free(uuid) from public, anon, authenticated;" in provision else "FAIL",
-        "entitlement_function_deployed": "PASS" if ENTITLEMENT_FUNCTION_DEPLOYED else "FAIL",
-        "pilot_branch_deployed": "FAIL",
+        "entitlement_function_deployed": "PASS" if ENTITLEMENT_FUNCTION_DEPLOYED else _external(supplied, "entitlement_function_deployed"),
+        "pilot_recreation_documented": "PASS" if "Genskabelse" in pilot else "FAIL",
+        "pilot_branch_deployed": _external(supplied, "pilot_branch_deployed"),
         "deletion_policy_documented": "PASS" if lifecycle_doc.is_file() else "FAIL",
         "recovery_code_present": "PASS" if "def request_password_reset" in auth else "FAIL",
         "password_change_code_ready": "PASS" if "_refuse_deleted_preview" in auth else "FAIL",
-        "password_change_live": _evidence(supplied, "password_change_live"),
+        "password_change_live": _external(supplied, "password_change_live"),
         "stripe_off": "PASS" if not stripe_test.ENTITLEMENT_UPDATES_ENABLED else "FAIL",
         "deletion_execution_off": "PASS" if not account_lifecycle.DELETION_EXECUTION_ENABLED else "FAIL",
         "monitoring_runbook_current": "PASS" if operations_doc.is_file() and "release-gate" in operations_doc.read_text(encoding="utf-8") else "FAIL",
@@ -298,8 +308,26 @@ def launch_gate(evidence: Mapping[str, Any] | None = None, *, root=None) -> dict
     return {"items": items, "open_registration": False, "decision": "closed"}
 
 
-def _evidence(evidence: Mapping[str, Any], name: str) -> str:
-    return "PASS" if evidence.get(name) is True else "FAIL"
+def _token_return_ready(component: str) -> bool:
+    return (
+        "streamlit:setComponentValue" in component
+        and 'var ACTION = "registration"' in component
+        and "event.source !== window.parent" in component
+        and captcha.PASS_SECRET not in component
+        and "TRADERDASH_TURNSTILE_SECRET_KEY" not in component
+    )
+
+
+def _age_policy_ready(platform: str, terms: str) -> bool:
+    return (
+        TRADERDASH_PILOT_MINIMUM_AGE == 18
+        and "fyldt 18" in terms
+        and "ikke en Market Tools-regel" in platform
+    )
+
+
+def _external(evidence: Mapping[str, Any], name: str) -> str:
+    return "PASS" if evidence.get(name) is True else "EXTERNAL"
 
 
 def _mode(source: Mapping[str, str]) -> str:

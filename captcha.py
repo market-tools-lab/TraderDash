@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import re
+from pathlib import Path
 from typing import Any, Callable, Mapping
 from urllib.parse import urlsplit
 
@@ -20,8 +21,11 @@ SPENT_SECRET = "3x0000000000000000000000000000000AA"
 PASS_SITE_KEY = "1x00000000000000000000AA"
 _TEST_SECRETS = frozenset({PASS_SECRET, FAIL_SECRET, SPENT_SECRET})
 _SITE_KEY = re.compile(r"^[0-9A-Za-z_-]{10,80}$")
+_TOKEN = re.compile(r"^[A-Za-z0-9._-]{20,2048}$")
 _SEEN: set[str] = set()
+_COMPONENT = None
 Transport = Callable[[str, Mapping[str, str]], Mapping[str, Any]]
+Widget = Callable[[str, str], Any]
 
 
 class CaptchaRejected(Exception):
@@ -39,26 +43,49 @@ def site_key(env: Mapping[str, str] | None = None) -> str:
     return str(source.get("TRADERDASH_TURNSTILE_SITE_KEY", "")).strip()
 
 
-def widget_markup(candidate: str) -> str:
-    """Official widget markup. A secret or an unsafe site key produces nothing."""
+def site_key_allowed(candidate: str, env: Mapping[str, str] | None = None) -> bool:
+    """A public site key may be shown. A secret or a production test key may not."""
+    source = env if env is not None else os.environ
     key = str(candidate or "").strip()
     if key in _TEST_SECRETS or not _SITE_KEY.fullmatch(key):
-        return ""
-    return (
-        '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>'
-        f'<div class="cf-turnstile" data-sitekey="{key}" data-action="{ACTION}"></div>'
-    )
-
-
-def render_widget(candidate: str) -> bool:
-    """Show the widget. The sandboxed frame cannot submit the token by itself."""
-    markup = widget_markup(candidate)
-    if not markup:
         return False
-    import streamlit as st
-
-    st.html(markup, unsafe_allow_javascript=True)
+    production = str(source.get("TRADERDASH_ENV", "")).strip().lower() == "production"
+    mode = str(source.get("TRADERDASH_TURNSTILE_MODE", "")).strip().lower()
+    if key == PASS_SITE_KEY and (production or mode == "live"):
+        return False
     return True
+
+
+def _mount(sitekey: str, action: str) -> Any:
+    """Isolated Streamlit component. It receives the site key and returns a token."""
+    global _COMPONENT
+    if action != ACTION:
+        return ""
+    if _COMPONENT is None:
+        import streamlit.components.v1 as components
+
+        _COMPONENT = components.declare_component(
+            "traderdash_turnstile",
+            path=str(Path(__file__).resolve().parent / "captcha_component"),
+        )
+    return _COMPONENT(sitekey=sitekey, action=ACTION, default="", key="traderdash_turnstile_registration")
+
+
+def render_widget(
+    candidate: str,
+    *,
+    env: Mapping[str, str] | None = None,
+    component: Widget | None = None,
+) -> str | None:
+    """Return the token. None means the widget cannot be shown."""
+    key = str(candidate or "").strip()
+    if not site_key_allowed(key, env):
+        return None
+    runner = component or _mount
+    value = runner(key, ACTION)
+    if not isinstance(value, str) or not _TOKEN.fullmatch(value):
+        return ""
+    return value
 
 
 def verify(
