@@ -39,7 +39,7 @@ Repositoriet er den versionerede tekniske dokumentation. Hemmelige værdier ligg
 | `docs/production/PRIVACY_NOTICE.md` | Udkast til privatlivsnotits |
 | `docs/production/TERMS_OF_USE.md` | Udkast til pilotvilkår |
 | `docs/production/PUBLIC_PILOT.md` | Pilotdrift. Registrering er lukket |
-| `docs/production/SUPPORT_MAIL.md` | Krav til supportmail. Indbakken er ikke i drift |
+| `docs/production/SUPPORT_MAIL.md` | `support@markettools.app` er i drift. Den private modtager står ikke her |
 | `captcha_component/index.html` | Isoleret Turnstile-komponent. Hemmeligheden ligger ikke her |
 
 ## Uden for mergen

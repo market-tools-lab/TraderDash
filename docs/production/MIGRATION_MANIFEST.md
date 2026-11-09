@@ -76,12 +76,12 @@ Forventet skrivetal for entitlements er 0. `public.users` må have samme rækket
 
 Appens rollback er `TRADERDASH_AUTH_MODE=legacy` eller en fjernet variabel. Cloud sættes ikke i denne iteration.
 
-## Ikke kørt
+## Kørt 9. november 2026
 
 | Rækkefølge | Fil | SHA-256 af LF-teksten | Production |
 | --- | --- | --- | --- |
-| 3 | `supabase/migrations/20261109110000_provision_traderdash_free.sql` | `4e32c4e652b6d26b2cc73cc453438fcf0867b37eb84a1d2b25edd26361babbc7` | Ikke kørt. Må ikke køres uden en senere GO |
+| 3 | `supabase/migrations/20261109110000_provision_traderdash_free.sql` | `4e32c4e652b6d26b2cc73cc453438fcf0867b37eb84a1d2b25edd26361babbc7` | Kørt som `20261109111918` / `provision_traderdash_free` |
 
-Funktionen giver én Free-entitlement til TraderDash, når en betroet rolle kalder den. Den ændrer ikke en eksisterende aktiv entitlement. `anon` og `authenticated` har ikke execute.
+Projekt: Traderdash, `wxvobyifckbpnqfbnlxl`. Tidspunktet i historikken er 2026-11-09 11:19:18 UTC. Filnavnets version er `20261109110000`. Filhovedet siger stadig `NOT APPLIED`. Det er forberedelsesstemplet, og checksummen gælder den kørt tekst. Lokal prøve var bestået forinden og blev ikke gentaget. Efterkontrollen bestod: funktionen findes, `anon` og `authenticated` kan ikke kalde den, og den eksisterende Free-entitlement er uændret.
 
-Teksten er uændret efter token-returen 9. november 2026. Checksummen gælder stadig. Production er ikke kørt.
+Funktionen giver én Free-entitlement til TraderDash, når `postgres` eller `service_role` kalder den. Den kørte ikke af sig selv for den eksisterende Auth-bruger. Den ændrer ikke en eksisterende aktiv entitlement.

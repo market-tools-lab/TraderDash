@@ -47,4 +47,4 @@ Launch-listen i `registration.launch_gate` bliver ved med at svare `closed`. Den
 
 Lukning er at fjerne `TRADERDASH_AUTH_REGISTRATION` eller sætte den til `disabled`. Legacy-appen kræver ingen ændring.
 
-Serverkontrollen af Turnstile og funktionen `provision_traderdash_free` er forberedt på `feature/public-pilot-finalization`. De ændrer ikke denne lukkede standard. Widgettet er oprettet eksternt. Tokenet kan returneres fra en isoleret komponent, og serveren skal stadig godkende det.
+Serverkontrollen af Turnstile er forberedt på `feature/public-pilot-finalization`. Funktionen `provision_traderdash_free` er kørt på Production og ændrer ikke den lukkede registrering. Widgettet er oprettet eksternt. Tokenet kan returneres fra en isoleret komponent, og serveren skal stadig godkende det.

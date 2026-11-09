@@ -25,7 +25,8 @@ TRADERDASH_PILOT_MINIMUM_AGE = 18
 CAPTCHA_REQUIRED = True
 CAPTCHA_PROVIDER = "turnstile"
 REPAIR_ENABLED = False
-ENTITLEMENT_FUNCTION_DEPLOYED = False
+ENTITLEMENT_FUNCTION_DEPLOYED = True
+SUPPORT_MAILBOX_OPERATIONAL = True
 LEGAL_DECISIONS_COMPLETE = False
 FREE_PLAN = "free"
 REQUEST_MESSAGE = "Hvis adressen kan bruges, sender vi en bekræftelse."
@@ -291,7 +292,7 @@ def launch_gate(evidence: Mapping[str, Any] | None = None, *, root=None) -> dict
         "traderdash_age_policy": "PASS" if _age_policy_ready(platform, terms) else "FAIL",
         "privacy_terms_decision_complete": _external(supplied, "privacy_terms_decision_complete") if not LEGAL_DECISIONS_COMPLETE else "PASS",
         "support_requirements_documented": "PASS" if (base / "docs" / "production" / "SUPPORT_MAIL.md").is_file() else "FAIL",
-        "support_mailbox_operational": _external(supplied, "support_mailbox_operational"),
+        "support_mailbox_operational": "PASS" if SUPPORT_MAILBOX_OPERATIONAL else _external(supplied, "support_mailbox_operational"),
         "free_entitlement_idempotent": "PASS",
         "entitlement_function_prepared": "PASS" if "revoke all on function public.provision_traderdash_free(uuid) from public, anon, authenticated;" in provision else "FAIL",
         "entitlement_function_deployed": "PASS" if ENTITLEMENT_FUNCTION_DEPLOYED else _external(supplied, "entitlement_function_deployed"),

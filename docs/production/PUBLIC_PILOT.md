@@ -18,11 +18,11 @@ Den kørende pilot peger stadig på `feature/auth-email-recovery` og har ikke de
 
 ## Provision
 
-`provision_traderdash_free` er skrevet, prøvet lokalt og ikke ændret af token-arbejdet. Den er ikke kørt på Production. Authenticated kan ikke kalde den. En eksisterende Free-entitlement ændres ikke.
+`provision_traderdash_free` er kørt på Production som `20261109111918`. Checksummen for filen er `4e32c4e652b6d26b2cc73cc453438fcf0867b37eb84a1d2b25edd26361babbc7`. Authenticated kan ikke kalde den. Den eksisterende Free-entitlement er uændret. Registrering er stadig lukket.
 
 ## Alder og kontakt
 
-18 år er en TraderDash-pilotregel. Den er ikke en Market Tools-regel. `support@markettools.app` er beskrevet i `SUPPORT_MAIL.md` og er ikke i drift.
+18 år er en TraderDash-pilotregel. Den er ikke en Market Tools-regel. `support@markettools.app` er i drift. Detaljerne står i `SUPPORT_MAIL.md`. Auth-afsenderen er uændret.
 
 ## Genskabelse
 

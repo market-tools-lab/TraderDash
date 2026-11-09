@@ -2,7 +2,7 @@
 
 Version: traderdash-pilot-2026-11-09. Udkast til kontrolleret test. Dette er ikke en endelig juridisk tekst.
 
-Market Tools driver TraderDash som ét produkt på `markettools.app`. En offentlig kontaktadresse er endnu ikke i drift. `support@markettools.app` er en placeholder og er ikke en fungerende indbakke. Den må ikke bruges, før en prøvemail er modtaget.
+Market Tools driver TraderDash som ét produkt på `markettools.app`. Kontaktadressen er `support@markettools.app`. Den modtager mail. Den private videresendelse står ikke her.
 
 ## Oplysninger
 
@@ -18,4 +18,4 @@ Kontooplysninger beholdes, mens kontoen er aktiv. En sletteanmodning følger kon
 
 ## Rettigheder
 
-Du kan bede om indsigt, rettelse og sletning, når kontaktadressen er i drift. Klage kan indgives til Datatilsynet. Overførsel til underdatabehandlere uden for Danmark skal vurderes, før offentlig åbning. Piloten er lukket, og registrering er ikke åbnet.
+Du kan bede om indsigt, rettelse og sletning på `support@markettools.app`. Klage kan indgives til Datatilsynet. Overførsel til underdatabehandlere uden for Danmark skal vurderes, før offentlig åbning. Piloten er lukket, og registrering er ikke åbnet.
