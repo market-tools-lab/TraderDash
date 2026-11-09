@@ -22,7 +22,7 @@ Den synlige tekst ved et kald er "Hvis adressen kan bruges, sender vi en bekræf
 
 ## Data
 
-Profilen oprettes af den eksisterende trigger `handle_new_user` i samme databasettransaktion som Auth-brugeren. Entitlement oprettes først bagefter, og kun for TraderDash. `provision_traderdash_free_self()` læser den bekræftede bruger fra databasen og kalder den eksisterende funktion for netop den bruger. `anon` kan ikke kalde den. Den brede funktion med et vilkårligt id er stadig lukket for `anon` og `authenticated`. `apply_free_entitlement` er kun en testskriver. Den kan ikke skrive i Production, den slettede preview eller for et beskyttet id. Appen kalder den ikke. Den nye funktion er forberedt og ikke kørt på Production.
+Profilen oprettes af den eksisterende trigger `handle_new_user` i samme databasettransaktion som Auth-brugeren. Entitlement oprettes først bagefter, og kun for TraderDash. `provision_traderdash_free_self()` læser den bekræftede bruger fra databasen og kalder den eksisterende funktion for netop den bruger. `anon` kan ikke kalde den. Den brede funktion med et vilkårligt id er stadig lukket for `anon` og `authenticated`. `apply_free_entitlement` er kun en testskriver. Den kan ikke skrive i Production, den slettede preview eller for et beskyttet id. Appen kalder den ikke som en reparationsskriver. Den nye funktion er kørt på Production som `20261109121539`. Registrering er stadig lukket.
 
 Free er den eneste plan. Den giver 30 papirer. Nordic, International og Stripe kan ikke vælges i tilmeldingen.
 

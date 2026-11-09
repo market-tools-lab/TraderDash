@@ -28,7 +28,7 @@ REPAIR_ENABLED = False
 ENTITLEMENT_FUNCTION_DEPLOYED = True
 SUPPORT_MAILBOX_OPERATIONAL = True
 LEGAL_DECISIONS_COMPLETE = False
-SELF_ENROLLMENT_DEPLOYED = False
+SELF_ENROLLMENT_DEPLOYED = True
 FREE_PLAN = "free"
 _REPAIR_TARGET = "local-test"
 _ACCEPTED_FREE_SOURCES = frozenset({"signup", "migration"})
@@ -315,7 +315,8 @@ def launch_gate(evidence: Mapping[str, Any] | None = None, *, root=None) -> dict
         "free_entitlement_idempotent": "PASS",
         "entitlement_function_prepared": "PASS" if "revoke all on function public.provision_traderdash_free(uuid) from public, anon, authenticated;" in provision else "FAIL",
         "entitlement_function_deployed": "PASS" if ENTITLEMENT_FUNCTION_DEPLOYED else _external(supplied, "entitlement_function_deployed"),
-        "self_enrollment_prepared": "PASS" if _self_enrollment_ready(bridge) and not SELF_ENROLLMENT_DEPLOYED else "FAIL",
+        "self_enrollment_prepared": "PASS" if _self_enrollment_ready(bridge) else "FAIL",
+        "self_enrollment_deployed": "PASS" if SELF_ENROLLMENT_DEPLOYED else "FAIL",
         "pilot_recreation_documented": "PASS" if "Genskabelse" in pilot else "FAIL",
         "pilot_branch_deployed": _external(supplied, "pilot_branch_deployed"),
         "deletion_policy_documented": "PASS" if lifecycle_doc.is_file() else "FAIL",

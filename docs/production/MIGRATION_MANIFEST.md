@@ -86,10 +86,12 @@ Projekt: Traderdash, `wxvobyifckbpnqfbnlxl`. Tidspunktet i historikken er 2026-1
 
 Funktionen giver én Free-entitlement til TraderDash, når `postgres` eller `service_role` kalder den. Den kørte ikke af sig selv for den eksisterende Auth-bruger. Den ændrer ikke en eksisterende aktiv entitlement.
 
-## Forberedt 9. november 2026, ikke kørt
+## Kørt 9. november 2026, selvtilmelding
 
 | Rækkefølge | Fil | SHA-256 af LF-teksten | Production |
 | --- | --- | --- | --- |
-| 4 | `supabase/migrations/20261109140000_provision_traderdash_free_self.sql` | `83dcb6ede525033ced3ce24c1b81f6d753a27581a5a450ca9c2716f3418cf7cb` | Ikke kørt |
+| 4 | `supabase/migrations/20261109140000_provision_traderdash_free_self.sql` | `83dcb6ede525033ced3ce24c1b81f6d753a27581a5a450ca9c2716f3418cf7cb` | Kørt som `20261109121539` / `provision_traderdash_free_self` |
 
-Funktionen `provision_traderdash_free_self()` tager intet bruger-id. Den afviser en ubekræftet adresse og kalder derefter den allerede kørte funktion for `auth.uid()`. `anon` kan ikke køre den. Den kørte funktion med et vilkårligt id er uændret. Filen er ikke anvendt på Production.
+Projekt: Traderdash, `wxvobyifckbpnqfbnlxl`. Tidspunktet i historikken er 2026-11-09 12:15:39 UTC. Filnavnets version er `20261109140000`. Filhovedet siger stadig `NOT APPLIED`. Det er forberedelsesstemplet, og checksummen gælder den uændrede tekst.
+
+Funktionen `provision_traderdash_free_self()` tager intet bruger-id. Den læser `email_confirmed_at` for `auth.uid()` og kalder derefter den allerede kørte funktion for den samme bruger. `anon` kan ikke køre den. `authenticated` kan køre kun denne funktion. `authenticated` kan stadig ikke køre `provision_traderdash_free(uuid)`. `postgres` og `service_role` kan køre den, men kaldet uden en brugeridentitet afvises af funktionen. Efterkontrollen viste én historikpost, ingen ny Auth-bruger, og den eksisterende Free-entitlement med kilden `migration` er uændret. Funktionen blev ikke kaldt for den eksisterende pilot.
