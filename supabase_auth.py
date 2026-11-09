@@ -450,6 +450,31 @@ class Client:
             raise AuthError(RESET_UNAVAILABLE)
         _ops("AUTH_RECOVERY_REQUEST")
 
+    def signup(self, email: str, password: str, redirect_url: str, captcha_token: str) -> dict[str, Any]:
+        """Create an unconfirmed Auth user. A session in the response is discarded."""
+        from registration import registration_open
+
+        if self.base_url.rstrip("/") == PREVIEW_ORIGIN or not registration_open():
+            raise AuthError("Kontoen kunne ikke oprettes.")
+        quoted = urllib.parse.quote(redirect_url, safe="")
+        status, body = self._request(
+            "POST",
+            "/auth/v1/signup?redirect_to=" + quoted,
+            {
+                "email": str(email or "").strip(),
+                "password": password,
+                "gotrue_meta_security": {"captcha_token": str(captcha_token or "")},
+            },
+        )
+        if status in {400, 422}:
+            return {"created": False, "confirmed": False, "session_returned": False}
+        if status != 200 or not isinstance(body, dict):
+            raise AuthError("Kontoen kunne ikke oprettes.")
+        session_returned = bool(body.get("access_token"))
+        user = body.get("user") if isinstance(body.get("user"), dict) else body
+        confirmed = bool(user.get("email_confirmed_at") or user.get("confirmed_at"))
+        return {"created": True, "confirmed": confirmed, "session_returned": session_returned}
+
     def exchange_recovery(self, token_hash: str) -> str:
         """Exchange a recovery token hash for an access token. The refresh token is discarded."""
         if not delivery_enabled() or not str(token_hash or "").strip():
@@ -465,6 +490,27 @@ class Client:
         if not access_token:
             raise AuthError(RESET_INVALID)
         return access_token
+
+    def exchange_signup(self, token_hash: str) -> dict[str, Any]:
+        """Confirm an address. The access token from Auth is not returned."""
+        from registration import registration_open
+
+        if self.base_url.rstrip("/") == PREVIEW_ORIGIN or not registration_open():
+            raise AuthError("Linket er ikke gyldigt længere.")
+        if not str(token_hash or "").strip():
+            raise AuthError("Linket er ikke gyldigt længere.")
+        status, body = self._request(
+            "POST",
+            "/auth/v1/verify",
+            {"type": "signup", "token_hash": str(token_hash)},
+        )
+        if status != 200 or not isinstance(body, dict):
+            raise AuthError("Linket er ikke gyldigt længere.")
+        user = body.get("user") if isinstance(body.get("user"), dict) else {}
+        user_id = str(user.get("id") or "")
+        if not user_id:
+            raise AuthError("Linket er ikke gyldigt længere.")
+        return {"user_id": user_id, "confirmed": True, "expired": False}
 
     def update_password_from_recovery(self, token: str, new_password: str) -> None:
         if not delivery_enabled():
