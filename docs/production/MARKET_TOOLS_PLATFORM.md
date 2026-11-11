@@ -15,3 +15,7 @@ Alderskravet på 18 år hører til TraderDash-piloten. Det er ikke en Market Too
 TraderDash-profilen, 18-årsbekræftelsen og den ene Free-entitlement er produktets eget trin. Triggeren `handle_new_user` opretter kun profilen. Den giver ikke et produkt. `provision_traderdash_free(uuid)` kan stadig kun kaldes af en betroet database-rolle, og den tager et vilkårligt id. Den nye funktion `provision_traderdash_free_self()` tager intet id. Den bruger kun den bekræftede kalder fra `auth.uid()`, og kun TraderDash-bekræftelsen kalder den. Et senere produkt skal have sin egen funktion. Free er 30 papirer. Nordic, International og Stripe kan ikke vælges ved tilmelding.
 
 En bekræftet Auth-bruger er ikke det samme som en bruger med adgang til TraderDash.
+
+## Grænse
+
+Market Tools er kontoen, bekræftet e-mail, nulstilling, registreringsrammen, CAPTCHA-afgrænsningen, kvitteringen for teksterne, kontolivscyklussen og overvågningen. TraderDash er Free-tilmeldingen, de 30 papirer, 18-årsreglen for denne pilot og produktadgangen. Et senere produkt får sin egen funktion og sit eget flag.

@@ -2,7 +2,7 @@
 
 Dato: 4. november 2026. Branch: `feature/supabase-auth`.
 
-Denne fil er en kørselsliste. Ingen sætning her er kørt mod Production. Preview er `ajbsoudovxstlolojvte` / `https://ajbsoudovxstlolojvte.supabase.co`.
+Denne fil er kørselslisten. Afsnittene nedenfor siger, hvad der er kørt på Production `wxvobyifckbpnqfbnlxl`. Preview `ajbsoudovxstlolojvte` er slettet og må ikke oprettes igen.
 
 SHA-256 i tabellerne er taget af Windows-arbejdskopierne med CRLF, da filerne blev anvendt. Git gemmer samme SQL-tekst med LF, og testen låser den form. Filnavnets tidsstempel og preview-historikkens version er ikke det samme, fordi preview fik migrationen et senere tidspunkt.
 
@@ -21,7 +21,7 @@ Backup-gaten er grøn. Verified 2026-11-04 på Traderdash / `main` / PRODUCTION.
 | 1 | `supabase/migrations/20261104110000_identity_catalog.sql` | `fdf53d809b5811baf43afe577be9c86e5fe475c5e1fab20b3bacfb6421573951` | `public.users` findes og er urørt. `auth.users` findes | Kørt som `20261104112720` | Kørt som `20261104143544` |
 | 2 | `supabase/migrations/20261104140000_legacy_auth_links.sql` | `671d8e9e7cd6d6e87b3e668b3b3bf5048a817093f55e07dd75c922f018c3a0c9` | Rækkefølge 1. Ingen ændring af `public.users` | Kørt som `20261104130624` | Kørt som `20261104143902` |
 
-Iteration 7 ændrede ikke skemaet. Der er ingen tredje migrationsfil.
+De to senere TraderDash-funktioner står i afsnittene for 9. november. Deres SQL-filer ændres ikke, efter at Production har kørt dem.
 
 Filhovedet i identity catalog siger stadig `NOT APPLIED`. Det er det oprindelige forberedelsesstempel, og den statiske test låser formuleringen. Preview-historikken og Production-historikken er sandheden for de to databaser. Production er kørt som `20261104143544` og `20261104143902`.
 

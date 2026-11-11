@@ -26,7 +26,7 @@ Piloten følger `feature/public-pilot-finalization`. Registreringen er lukket. D
 
 ## Genskabelse
 
-Gør det ikke i denne omgang. Community Cloud kan ikke skifte branch. En senere app skal hedde `traderdash-next`, bruge samme URL, `app.py` og Python 3.14.
+Genskabelsen er allerede udført. Community Cloud kan ikke skifte branch på en eksisterende app. Den kørende app er `traderdash-next`, `app.py` og Python 3.14 på `feature/public-pilot-finalization`. Den skal ikke slettes for den senere test. Testen står i `CONTROLLED_SIGNUP.md`.
 
 Kilden skal være `feature/public-pilot-finalization`, når den commit er godkendt. Efter en senere merge er kilden `master`.
 

@@ -10,7 +10,7 @@ Registrering er lukket. Stripe er slået fra. Legacy forbliver default. Én rigt
 
 Før denne branch var kaldet låst til preview-projektet `ajbsoudovxstlolojvte`, og `redirect_to` skulle være selve preview-origin. Det link fører ikke tilbage til Streamlit. Et hash-fragment med access token kan Streamlit-serveren ikke læse. Derfor bruges Supabases `token_hash`-mønster: linket lander på en allowlistet app-URL med `token_hash` og `type=recovery` i query-strengen. Appen bytter hash til en session via `POST /auth/v1/verify`, sætter adgangskoden og logger den session ud. Refresh-token gemmes ikke.
 
-Logget-ind skift af adgangskode er stadig låst til preview via `_require_preview`. Det er en anden vej end nulstillingslinket.
+Logget-ind skift af adgangskode bruger det konfigurerede projekt og afviser den slettede preview via `_refuse_deleted_preview`. Det er en anden vej end nulstillingslinket.
 
 ## Tiltænkt forløb
 

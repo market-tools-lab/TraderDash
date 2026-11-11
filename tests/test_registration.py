@@ -572,6 +572,19 @@ class RegistrationTests(unittest.TestCase):
         self.assertNotIn("provision_traderdash_free", component)
         self.assertNotIn("service_role", component)
 
+    def test_controlled_signup_runbook_keeps_registration_closed(self):
+        text = (ROOT / "docs" / "production" / "CONTROLLED_SIGNUP.md").read_text(encoding="utf-8")
+        self.assertIn("TRADERDASH_AUTH_REGISTRATION", text)
+        self.assertIn("traderdash-next", text)
+        self.assertIn("traderdash-market", text)
+        self.assertIn("provision_traderdash_free_self", text)
+        self.assertIn("30 papirer", text)
+        self.assertIn("## Stop", text)
+        self.assertIn("disabled", text)
+        self.assertNotIn("eyJ", text)
+        self.assertNotIn("service_role", text)
+        self.assertFalse(registration.registration_open({}))
+
 
 def _ready() -> dict:
     return {
