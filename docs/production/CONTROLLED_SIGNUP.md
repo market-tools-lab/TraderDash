@@ -2,11 +2,27 @@
 
 Dato: 11. november 2026. Branch: `feature/public-pilot-finalization`.
 
-Denne tekst åbner ikke registrering. Den opretter ingen bruger og sender ingen mail. Adgangskoder og hemmelige værdier står ikke her.
+Denne tekst åbner ikke registrering. Adgangskoder, tokens og hemmelige værdier står ikke her. Testkontoen `markettools.pilot@proton.me` beholdes som fixture.
+
+## Gennemført forløb
+
+12. november 2026, på `feature/public-pilot-finalization`, med registrering lukket bagefter.
+
+De første forsøg stoppede sikkert før Auth. Først manglede HTTPS-transporten til Cloudflare. Dernæst nåede tokenet ikke Python. Dernæst manglede serverens Turnstile-konfiguration. Ingen af de forsøg oprettede en bruger.
+
+Den kontrollerede prøve oprettede derefter én Auth-bruger. Turnstile viste Success. Tokenet nåede Python. Serveren godkendte det. Auth accepterede tilmeldingen. Den neutrale tekst blev vist. Bekræftelsesmailen kom frem i Proton Mail fra `noreply@auth.markettools.app`, og linket åbnede `traderdash-next`. E-mailen blev bekræftet. Der var én identitet og én profil med versionen `traderdash-pilot-2026-11-09`. Bekræftelsen efterlod kontoen uden entitlement, fordi linket ikke gav appen `token_hash` og `type=signup`.
+
+Login-genoptagelsen blev tilføjet. Ét normalt login kaldte `provision_traderdash_free_self()` med brugerens egen session. Resultatet er én aktiv TraderDash Free-entitlement, kilde `signup`, 30 papirer. Nordic, International, betalt plan og Stripe-hændelser er nul.
+
+Brugeren kom ind i TraderDash som Free. Betalte områder forblev lukkede. Opgraderingsknapperne viste kun, at betaling ikke er aktiveret. De kaldte ikke Stripe og ændrede ikke entitlement.
+
+Det første skift af adgangskode blev afvist med længdekravet, fordi den gemte session slettede felterne, før formularen læste dem. Rettelsen er `c243a48d933078d52ce28d164a696bc3c49b1553`. Efter den kørte på piloten, blev adgangskoden skiftet én gang. Appen loggede brugeren ud. Login med den nye adgangskode lykkedes. Den nye adgangskode ligger hos Theis i Proton Pass og står ikke her.
+
+Registrering er `disabled`. Legacy, `pilot-i9` og den oprindelige Free-entitlement med kilden `migration` er uændrede. Sletning er slået fra.
 
 ## Første forsøg
 
-12. november 2026 blev ét forsøg sendt, mens registrering var åben på `traderdash-next`. Svaret var "Kontoen kunne ikke oprettes." Årsagen var, at serveren kaldte Turnstile-kontrollen uden HTTPS-transporten, så tokenet ikke nåede Cloudflare. Auth blev ikke kaldt. Der blev ikke oprettet en bruger, en profil, en entitlement eller en bekræftelsesmail. Stripe og legacy var uændrede. Registreringen blev sat til `disabled` bagefter. Et nyt forsøg venter, til rettelsen er grøn og ude på piloten.
+12. november 2026 blev de tidlige forsøg sendt, mens registrering kortvarigt var åben på `traderdash-next`. De sikre afvisninger kom, før Auth blev kaldt. De er afsluttet i forløbet ovenfor.
 
 Piloten er `https://traderdash-next.streamlit.app`. Legacy er `https://traderdash-market.streamlit.app` og røres ikke. Én testkonto beholdes bagefter. Sletning testes ikke.
 
@@ -35,13 +51,13 @@ Opret kun den ene konto. Theis vælger selv adgangskoden i formularen. Bekræft 
 Efter linket:
 
 - e-mailen er bekræftet
-- der er kommet præcis én ny Auth-bruger og én profil
-- bekræftelsen har kaldt `provision_traderdash_free_self()`
+- der er præcis én ny Auth-bruger, én identitet og én profil
+- login har kaldt `provision_traderdash_free_self()`, fordi bekræftelseslinket ikke gav appen `token_hash`
 - der er præcis én aktiv TraderDash Free-entitlement
 - kilden er `signup`
 - planen giver 30 papirer
 - Nordic, International og Stripe-hændelser er stadig nul
-- den nye konto kan logge ind
+- den nye konto kan logge ind, også efter skift af adgangskode
 - den gamle pilotkonto har stadig én Free-entitlement med kilden `migration`
 
 ## Skift af adgangskode

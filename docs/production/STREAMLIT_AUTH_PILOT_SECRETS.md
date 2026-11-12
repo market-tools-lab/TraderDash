@@ -20,4 +20,19 @@ Disse værdier må ikke indsættes:
 - preview-nøgle
 - legacy password eller `password_hash`
 
-Redirect-URL er ikke en secret i denne pilot. Nulstilling og skift af adgangskode er stadig låst til preview og bruges ikke af pilot-login.
+Redirect-URL er ikke en secret i denne pilot. Nulstilling og skift af adgangskode bruger den allowlistede pilotadresse. De er ikke låst til den slettede preview.
+
+## Turnstile
+
+Værdierne står ikke her. `captcha.verify()` lukker, før Cloudflare kaldes, hvis et af de tre første navne mangler eller er tomt.
+
+| Navn | Krav i den kørende kode |
+| --- | --- |
+| `TRADERDASH_TURNSTILE` | præcis `required` |
+| `TRADERDASH_TURNSTILE_HOSTNAME` | `traderdash-next.streamlit.app` |
+| `TRADERDASH_TURNSTILE_SECRET_KEY` | serverens siteverify-nøgle. En allerede sat værdi udskiftes ikke herfra |
+| `TRADERDASH_TURNSTILE_SITE_KEY` | widgetens offentlige nøgle. Den kalder ikke siteverify |
+| `TRADERDASH_TURNSTILE_MODE` | `live` på piloten. En ukendt tilstand er ikke i sig selv `missing_configuration` |
+| `TRADERDASH_ENV` | `production` på piloten. Samme afgrænsning som tilstanden |
+
+`TRADERDASH_AUTH_REGISTRATION` forbliver `disabled`, medmindre en kontrolleret prøve åbner den.

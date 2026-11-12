@@ -18,4 +18,4 @@ Kontooplysninger beholdes, mens kontoen er aktiv. En sletteanmodning følger kon
 
 ## Rettigheder
 
-Du kan bede om indsigt, rettelse og sletning på `support@markettools.app`. Klage kan indgives til Datatilsynet. Overførsel til underdatabehandlere uden for Danmark skal vurderes, før offentlig åbning. Piloten er lukket, og registrering er ikke åbnet.
+Du kan bede om indsigt, rettelse og sletning på `support@markettools.app`. Klage kan indgives til Datatilsynet. Overførsel til underdatabehandlere uden for Danmark skal vurderes, før ubegrænset offentlig åbning. Registrering er lukket efter én kontrolleret prøve. Sletning kan endnu ikke udføres i appen.
