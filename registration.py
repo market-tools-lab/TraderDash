@@ -186,6 +186,8 @@ def complete_verification(
     report = reconcile(merged)
     if report["access"]:
         _log("REGISTRATION_COMPLETED")
+    elif report["confirmed"] and report["profile_present"] and "entitlement_missing" in report["findings"]:
+        _log("REGISTRATION_PARTIAL")
     elif report["findings"]:
         _log("REGISTRATION_RECONCILIATION_REQUIRED", finding=report["findings"][0])
     else:

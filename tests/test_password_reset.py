@@ -321,9 +321,14 @@ class RecoveryTests(unittest.TestCase):
         reset_text = (directory / "password-reset.txt").read_text(encoding="utf-8")
         reset_html = (directory / "password-reset.html").read_text(encoding="utf-8")
         changed = (directory / "password-changed.txt").read_text(encoding="utf-8")
-        for body in (reset_text, reset_html):
+        signup_text = (directory / "signup-confirmation.txt").read_text(encoding="utf-8")
+        signup_html = (directory / "signup-confirmation.html").read_text(encoding="utf-8")
+        for body in (reset_text, reset_html, signup_text, signup_html):
             self.assertIn("{{ .TokenHash }}", body)
             self.assertIn("{{ .RedirectTo }}", body)
             self.assertNotIn("wxvobyifckbpnqfbnlxl", body)
             self.assertNotIn("eyJ", body)
+            self.assertNotIn("ConfirmationURL", body)
+        self.assertIn("type=signup", signup_text)
+        self.assertIn("type=signup", signup_html)
         self.assertIn("ikke til udsendelse", changed.lower())

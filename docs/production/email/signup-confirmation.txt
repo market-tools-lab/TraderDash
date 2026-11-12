@@ -1,0 +1,7 @@
+Bekræft adressen for at fortsætte oprettelsen af TraderDash.
+
+{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=signup
+
+Linket udløber. Hvis du ikke har bedt om oprettelsen, kan du se bort fra mailen.
+
+Mailen er en engangsbesked om login. Den er ikke sat i Supabase af denne fil.

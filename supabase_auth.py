@@ -95,13 +95,16 @@ def clear_local(state: MutableMapping[str, Any]) -> None:
 
 
 def plan_from_entitlements(rows: list[dict[str, Any]] | None, now: datetime | None = None) -> str | None:
-    """Active TraderDash plan, or None when access must stay closed."""
+    """The one active TraderDash plan. Several active rows stay closed."""
     moment = now or datetime.now(timezone.utc)
+    found = []
     for row in rows or []:
         plan = _plan_from_row(row, moment)
         if plan is not None:
-            return plan
-    return None
+            found.append(plan)
+    if len(found) != 1:
+        return None
+    return found[0]
 
 
 def sign_in(email: str, password: str, *, transport=None) -> "AuthSession | None":
@@ -134,6 +137,9 @@ def continue_traderdash_enrollment(
     """Enroll this confirmed user once when TraderDash Free is still missing."""
     if session is None or session.plan is not None or not session.profile_id:
         return session
+    if getattr(session, "confirmed", True) is False:
+        _ops("PRODUCT_ENROLLMENT_BLOCKED", reason="unconfirmed")
+        return session
     client = Client.from_env(transport)
     if not client.allows_product_enrollment():
         return session
@@ -143,13 +149,16 @@ def continue_traderdash_enrollment(
         _ops("ENTITLEMENT_FAILURE", where="self_enrollment")
         return session
     if rows:
+        if _active_enrollment_block(rows) == "unexpected_plan":
+            _ops("PRODUCT_ENROLLMENT_BLOCKED", reason="unexpected_plan")
         return session
+    _ops("PRODUCT_ENROLLMENT_REQUEST")
     try:
         client.enroll_self(session.access_token)
     except AuthError:
-        _ops("PRODUCT_ENROLLMENT", outcome="refused")
+        _ops("PRODUCT_ENROLLMENT_BLOCKED", reason="refused")
         return session
-    _ops("PRODUCT_ENROLLMENT", outcome="requested")
+    _ops("PRODUCT_ENROLLMENT_COMPLETED")
     try:
         enrolled = client._session(session.access_token, session.user_id, session.email)
     except AuthError:
@@ -391,12 +400,14 @@ class AuthSession:
         access_token: str,
         plan: str | None,
         profile_id: str | None,
+        confirmed: bool = True,
     ) -> None:
         self.user_id = user_id
         self.email = email
         self.access_token = access_token
         self.plan = plan
         self.profile_id = profile_id
+        self.confirmed = confirmed
 
     def as_user(self) -> User:
         if self.plan == "free":
@@ -447,7 +458,9 @@ class Client:
         user_id = str(user.get("id") or "")
         if not token or not user_id:
             raise AuthError("Supabase Auth er ikke tilgængelig.")
-        return self._session(token, user_id, str(user.get("email") or email or ""))
+        session = self._session(token, user_id, str(user.get("email") or email or ""))
+        _apply_confirmed(session, user)
+        return session
 
     def session_from_token(self, token: str) -> AuthSession | None:
         status, body = self._request("GET", "/auth/v1/user", token=token)
@@ -458,7 +471,9 @@ class Client:
         user_id = str(body.get("id") or "")
         if not user_id:
             return None
-        return self._session(token, user_id, str(body.get("email") or ""))
+        session = self._session(token, user_id, str(body.get("email") or ""))
+        _apply_confirmed(session, body)
+        return session
 
     def logout(self, token: str) -> None:
         self._request("POST", "/auth/v1/logout", token=token)
@@ -627,12 +642,16 @@ class Client:
         profile = False
         entitlements: list[dict[str, Any]] = []
         try:
-            if access_token:
+            _ops("REGISTRATION_VERIFIED")
+            if not access_token:
+                _ops("PRODUCT_ENROLLMENT_BLOCKED", reason="session")
+            else:
+                _ops("PRODUCT_ENROLLMENT_REQUEST")
                 try:
                     self.enroll_self(access_token)
-                    _ops("PRODUCT_ENROLLMENT", outcome="requested")
+                    _ops("PRODUCT_ENROLLMENT_COMPLETED")
                 except AuthError:
-                    _ops("PRODUCT_ENROLLMENT", outcome="refused")
+                    _ops("PRODUCT_ENROLLMENT_BLOCKED", reason="refused")
                 profile, entitlements = self.read_account(access_token, user_id)
         finally:
             if access_token:
@@ -733,6 +752,31 @@ class Client:
             "Authorization": f"Bearer {token or self.anon_key}",
         }
         return self.transport(method, self.base_url + path, headers, body)
+
+
+def _apply_confirmed(session: AuthSession, user: Mapping[str, Any]) -> None:
+    """Keep the default when the payload does not say whether the address is confirmed."""
+    if "email_confirmed_at" in user or "confirmed_at" in user:
+        session.confirmed = bool(user.get("email_confirmed_at") or user.get("confirmed_at"))
+
+
+def _active_enrollment_block(rows: list[dict[str, Any]]) -> str | None:
+    """Refuse a second plan. An existing Free row is left to the database function."""
+    active = [row for row in rows if str(row.get("status") or "") == "active"]
+    if not active:
+        return None
+    free = []
+    for row in active:
+        product = str(row.get("product") or "")
+        plan = str(row.get("plan") or "")
+        source = str(row.get("source") or "")
+        if product == TRADERDASH_PRODUCT and plan == "free" and source not in {"subscription", "purchase"}:
+            free.append(row)
+            continue
+        return "unexpected_plan"
+    if len(free) != 1:
+        return "unexpected_plan"
+    return "present"
 
 
 def _plan_from_row(row: dict[str, Any], now: datetime) -> str | None:

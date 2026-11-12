@@ -18,6 +18,7 @@ import operations
 import registration
 import stripe_test
 import supabase_auth
+import universes
 
 ROOT = Path(__file__).resolve().parents[1]
 PRODUCTION_URL = "https://wxvobyifckbpnqfbnlxl.supabase.co"
@@ -701,6 +702,208 @@ class RegistrationTests(unittest.TestCase):
         component = (ROOT / "captcha_component" / "index.html").read_text(encoding="utf-8")
         self.assertNotIn("provision_traderdash_free", component)
         self.assertNotIn("service_role", component)
+
+    def test_partial_confirmed_account_enrolls_once_and_a_failed_enroll_stays_partial(self):
+        secret = "partial-session-should-not-leak"
+        store = {"rows": []}
+
+        def transport(method, url, headers, body):
+            if url.endswith("/auth/v1/verify"):
+                self.assertEqual(body, {"type": "signup", "token_hash": "hash-partial"})
+                self.assertNotIn(NEW_ID, json.dumps(body))
+                return 200, {
+                    "access_token": secret,
+                    "refresh_token": "refresh-partial",
+                    "user": {
+                        "id": NEW_ID,
+                        "email_confirmed_at": "2026-11-12T11:40:00Z",
+                        "user_metadata": {"acknowledgement_version": registration.ACK_VERSION},
+                    },
+                }
+            if url.endswith("/rest/v1/rpc/provision_traderdash_free_self"):
+                self.assertEqual(body, {})
+                if not store["rows"]:
+                    store["rows"].append(
+                        {
+                            "status": "active",
+                            "source": "signup",
+                            "products": {"code": "traderdash"},
+                            "plans": {"code": "free"},
+                        }
+                    )
+                return 204, {}
+            if "/profiles" in url:
+                return 200, [{"id": NEW_ID}]
+            if "/entitlements" in url:
+                return 200, list(store["rows"])
+            if url.endswith("/auth/v1/logout"):
+                return 204, {}
+            self.fail(url)
+
+        stream = StringIO()
+        with opened(), redirect_stderr(stream):
+            first = registration.complete_verification("hash-partial", {"profile": True}, transport=transport)
+            second = registration.complete_verification("hash-partial", {"profile": True}, transport=transport)
+        self.assertTrue(first["access"])
+        self.assertTrue(second["access"])
+        self.assertEqual(first["papers"], 30)
+        self.assertEqual(first["product_stage"]["free_entitlements"], 1)
+        self.assertEqual(second["product_stage"]["source"], "signup")
+        self.assertEqual(len(store["rows"]), 1)
+        text = stream.getvalue()
+        self.assertIn("REGISTRATION_VERIFIED", text)
+        self.assertIn("PRODUCT_ENROLLMENT_REQUEST", text)
+        self.assertIn("PRODUCT_ENROLLMENT_COMPLETED", text)
+        self.assertIn("REGISTRATION_COMPLETED", text)
+        self.assertLess(text.index("PRODUCT_ENROLLMENT_REQUEST"), text.index("PRODUCT_ENROLLMENT_COMPLETED"))
+        self.assertLess(text.index("PRODUCT_ENROLLMENT_COMPLETED"), text.index("REGISTRATION_COMPLETED"))
+        self.assertNotIn(secret, text)
+        self.assertNotIn("refresh-partial", text)
+        self.assertNotIn("hash-partial", text)
+        self.assertNotIn(EMAIL, text)
+
+        def refused(method, url, headers, body):
+            if url.endswith("/auth/v1/verify"):
+                return 200, {
+                    "access_token": secret,
+                    "user": {
+                        "id": NEW_ID,
+                        "email_confirmed_at": "2026-11-12T11:40:00Z",
+                        "user_metadata": {"acknowledgement_version": registration.ACK_VERSION},
+                    },
+                }
+            if "provision_traderdash_free_self" in url:
+                return 500, {"message": "free plan missing"}
+            if "/profiles" in url:
+                return 200, [{"id": NEW_ID}]
+            if "/entitlements" in url:
+                return 200, []
+            if url.endswith("/auth/v1/logout"):
+                return 204, {}
+            self.fail(url)
+
+        failed = StringIO()
+        with opened(), redirect_stderr(failed):
+            report = registration.complete_verification("hash-partial", {"profile": True}, transport=refused)
+        self.assertFalse(report["access"])
+        self.assertEqual(report["papers"], 0)
+        failed_text = failed.getvalue()
+        self.assertIn("PRODUCT_ENROLLMENT_BLOCKED", failed_text)
+        self.assertIn("REGISTRATION_PARTIAL", failed_text)
+        self.assertNotIn("REGISTRATION_COMPLETED", failed_text)
+        self.assertNotIn(secret, failed_text)
+
+    def test_login_resume_completes_a_missing_free_entitlement_once(self):
+        calls = []
+        rows = []
+
+        def transport(method, url, headers, body):
+            calls.append(url)
+            if "provision_traderdash_free_self" in url:
+                self.assertEqual(body, {})
+                rows.append(
+                    {
+                        "status": "active",
+                        "source": "signup",
+                        "starts_at": "2020-01-01T00:00:00Z",
+                        "ends_at": None,
+                        "products": {"code": "traderdash"},
+                        "plans": {"code": "free"},
+                    }
+                )
+                return 204, {}
+            if "/entitlements" in url:
+                return 200, list(rows)
+            if "/profiles" in url:
+                return 200, [{"id": NEW_ID, "display_name": None}]
+            self.fail(url)
+
+        session = supabase_auth.AuthSession(
+            user_id=NEW_ID,
+            email=EMAIL,
+            access_token="login-token",
+            plan=None,
+            profile_id=NEW_ID,
+            confirmed=True,
+        )
+        closed = {"TRADERDASH_AUTH_REGISTRATION": "disabled"}
+        with opened(**closed):
+            first = supabase_auth.continue_traderdash_enrollment(session, transport=transport)
+            second = supabase_auth.continue_traderdash_enrollment(first, transport=transport)
+        self.assertEqual(first.plan, "free")
+        self.assertEqual(len(universes.stocks_for(first.plan)), 30)
+        self.assertIs(second, first)
+        self.assertEqual(sum("provision_traderdash_free_self" in url for url in calls), 1)
+        self.assertEqual(len(rows), 1)
+
+        def blocked(method, url, headers, body):
+            if "provision_traderdash_free_self" in url:
+                raise AssertionError("blocked plan was provisioned")
+            if "/profiles" in url:
+                return 200, [{"id": NEW_ID}]
+            if "/entitlements" in url:
+                return 200, [
+                    {
+                        "status": "active",
+                        "source": source,
+                        "starts_at": "2020-01-01T00:00:00Z",
+                        "ends_at": None,
+                        "products": {"code": "traderdash"},
+                        "plans": {"code": plan},
+                    }
+                ]
+            self.fail(url)
+
+        for plan, source in (
+            ("nordic", "subscription"),
+            ("international", "purchase"),
+            ("free", "subscription"),
+        ):
+            occupied = supabase_auth.AuthSession(
+                user_id=NEW_ID,
+                email=EMAIL,
+                access_token="login-token",
+                plan=None,
+                profile_id=NEW_ID,
+                confirmed=True,
+            )
+            with opened(**closed):
+                left = supabase_auth.continue_traderdash_enrollment(occupied, transport=blocked)
+            self.assertIsNone(left.plan)
+
+        unconfirmed = supabase_auth.AuthSession(
+            user_id=NEW_ID,
+            email=EMAIL,
+            access_token="login-token",
+            plan=None,
+            profile_id=NEW_ID,
+            confirmed=False,
+        )
+
+        def refuse_unconfirmed(*args):
+            raise AssertionError("unconfirmed login was provisioned")
+
+        with opened(**closed):
+            stayed = supabase_auth.continue_traderdash_enrollment(unconfirmed, transport=refuse_unconfirmed)
+        self.assertIs(stayed, unconfirmed)
+
+        duplicate = [
+            {
+                "status": "active",
+                "starts_at": "2020-01-01T00:00:00Z",
+                "ends_at": None,
+                "products": {"code": "traderdash"},
+                "plans": {"code": "free"},
+            },
+            {
+                "status": "active",
+                "starts_at": "2020-01-01T00:00:00Z",
+                "ends_at": None,
+                "products": {"code": "traderdash"},
+                "plans": {"code": "free"},
+            },
+        ]
+        self.assertIsNone(supabase_auth.plan_from_entitlements(duplicate))
 
     def test_controlled_signup_runbook_keeps_registration_closed(self):
         text = (ROOT / "docs" / "production" / "CONTROLLED_SIGNUP.md").read_text(encoding="utf-8")
