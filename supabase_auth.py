@@ -82,11 +82,18 @@ def forget_password(state: MutableMapping[str, Any]) -> None:
         state.pop(key, None)
 
 
+# The logged-in change form is drawn after load_saved_session. Clearing these
+# keys there deletes the submitted values before the widgets can read them.
+_KEEP_UNTIL_PASSWORD_FORM = frozenset({"next_password", "next_confirmation"})
+
+
 def remember(session: "AuthSession", state: MutableMapping[str, Any]) -> None:
     state[TOKEN_KEY] = session.access_token
     state[USER_KEY] = session.user_id
     state[EMAIL_KEY] = session.email
-    forget_password(state)
+    for key in PASSWORD_KEYS:
+        if key not in _KEEP_UNTIL_PASSWORD_FORM:
+            state.pop(key, None)
 
 
 def clear_local(state: MutableMapping[str, Any]) -> None:
