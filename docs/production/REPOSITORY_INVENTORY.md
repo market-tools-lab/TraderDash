@@ -36,6 +36,9 @@ Repositoriet er den versionerede tekniske dokumentation. Hemmelige værdier ligg
 | `docs/production/DISASTER_RECOVERY.md` | Gendannelse. Ingen hemmeligheder og ingen kørsel mod Production |
 | `docs/production/ACCOUNT_LIFECYCLE.md` | Kontolivscyklus. Sletning er ikke slået til |
 | `docs/production/OPERATIONS.md` | Drift og lokale sundhedstjek. Ingen ekstern betalingstjeneste |
+| `docs/production/CURRENT_BASELINE.md` | Gældende ikke-hemmelig production-tilstand |
+| `docs/production/CONFIGURATION.md` | Navne, lag og lukket standard. Ingen hemmelige værdier |
+| `docs/production/SIGNUP_CONFIRMATION.md` | Tiltænkt bekræftelseslink. Dashboardet er ikke ændret |
 | `docs/production/PUBLIC_REGISTRATION.md` | Registrering er forberedt og lukket |
 | `docs/production/MARKET_TOOLS_PLATFORM.md` | Platform og TraderDash-produkt |
 | `docs/production/PRIVACY_NOTICE.md` | Udkast til privatlivsnotits |
@@ -60,7 +63,7 @@ Ingen hemmelighed står her. Ingen adgangskode, intet token og ingen SMTP-nøgle
 | Udbyder | Resend |
 | Afsender | `noreply@auth.markettools.app`, vist som TraderDash |
 | Pilot | `https://traderdash-next.streamlit.app` |
-| Pilotens kilde | `market-tools-lab/TraderDash`, branch `feature/public-pilot-finalization`, `app.py`, Python 3.14 |
+| Pilotens kilde | `market-tools-lab/TraderDash`, stadig `feature/public-pilot-finalization`, `app.py`, Python 3.14. `master` har koden og er ikke appens branch |
 | Legacy | `https://traderdash-market.streamlit.app` forbliver på `master` |
 | Prøvedato | 4. november 2026 |
 

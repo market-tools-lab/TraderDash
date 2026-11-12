@@ -18,4 +18,4 @@ En bekræftet Auth-bruger er ikke det samme som en bruger med adgang til TraderD
 
 ## Grænse
 
-Market Tools er kontoen, bekræftet e-mail, nulstilling, registreringsrammen, CAPTCHA-afgrænsningen, kvitteringen for teksterne, kontolivscyklussen og overvågningen. TraderDash er Free-tilmeldingen, de 30 papirer, 18-årsreglen for denne pilot og produktadgangen. Et senere produkt får sin egen funktion og sit eget flag.
+Market Tools er identitet, registreringsramme, CAPTCHA, nulstilling, skift af adgangskode, kvittering for teksterne, kontolivscyklus, overvågning, gendannelse og drift. TraderDash er profilen, Free-tilmeldingen, de 30 papirer, Nordic og International som produktbegreber, 18-årsreglen for denne pilot og analysen. Et senere produkt, herunder Java & Co., får sin egen funktion og sit eget flag. Det arver ikke TraderDash-planen.

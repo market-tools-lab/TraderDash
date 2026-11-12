@@ -1,5 +1,7 @@
 # Auth Production-gate
 
+Historisk note fra 4. november 2026. Kontotal og pilotens branch nedenfor er ikke den nuværende tilstand. Den står i `CURRENT_BASELINE.md`.
+
 Dato: 4. november 2026.
 
 | Gate | Status |

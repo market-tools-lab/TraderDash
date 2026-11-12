@@ -43,8 +43,8 @@ Supabase Auth understøtter hCaptcha og Cloudflare Turnstile som CAPTCHA på sig
 
 ## Før åbning
 
-Launch-listen i `registration.launch_gate` bliver ved med at svare `closed`. Den kan ikke åbne registrering. Privatlivstekst, vilkår, databehandler og slettebeskrivelse er forretningsbeslutninger og er ikke skrevet som endelig tekst. CAPTCHA-kontoen, entitlement-funktionen og en bevidst ændring af sundhedstjekket mangler også.
+Launch-listen i `registration.launch_gate` bliver ved med at svare `closed`. Den kan ikke åbne registrering. Privatlivstekst og vilkår er udkast. Sletning kan ikke udføres i appen. Turnstile og de to provision-funktioner er i drift. Bekræftelsesmailens production-skabelon er ikke sat til appens link endnu. Det står i `SIGNUP_CONFIRMATION.md`.
 
 Lukning er at fjerne `TRADERDASH_AUTH_REGISTRATION` eller sætte den til `disabled`. Legacy-appen kræver ingen ændring.
 
-Serverkontrollen af Turnstile er forberedt på `feature/public-pilot-finalization`. Funktionen `provision_traderdash_free` er kørt på Production og ændrer ikke den lukkede registrering. Widgettet er oprettet eksternt. Tokenet kan returneres fra en isoleret komponent, og serveren skal stadig godkende det.
+Serverkontrollen af Turnstile er i drift på piloten. Funktionen `provision_traderdash_free` er kørt på Production og ændrer ikke den lukkede registrering. Widgettet er oprettet eksternt. Tokenet kan returneres fra en isoleret komponent, og serveren skal stadig godkende det.

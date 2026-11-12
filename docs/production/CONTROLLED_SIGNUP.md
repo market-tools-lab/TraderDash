@@ -30,7 +30,7 @@ Piloten er `https://traderdash-next.streamlit.app`. Legacy er `https://traderdas
 
 1. Åbn piloten. Login viser E-mail, Adgangskode og Log ind. Nulstilling viser Send nulstillingslink. Opret konto er væk.
 2. `TRADERDASH_AUTH_REGISTRATION` mangler eller er `disabled` i pilotens secrets.
-3. Release-gate er grøn på `feature/public-pilot-finalization`. PR #8 er stadig kladde.
+3. Release-gate er grøn på `master` efter merge af PR #8. Et nyt vindue kræver en ny beslutning.
 4. Vælg én e-mail, som Theis selv kontrollerer, og som ikke er den eksisterende pilotkonto eller legacy-kontoen.
 5. Turnstile-widgettet Market Tools Registration Pilot tillader kun `traderdash-next.streamlit.app`. Managed, uden pre-clearance. Nøglerne ligger allerede i pilotens secrets.
 6. Resend, `auth.markettools.app`, Configuration: tracking metrics er ikke slået til. Configure bruges ikke. Forge og TLS ændres ikke.
