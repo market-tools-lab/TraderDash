@@ -23,13 +23,13 @@ Der findes ikke en dokumenteret Community Cloud-API til at oprette appen eller i
 
 Community Cloud kan ikke skifte Python-version efter deploy uden at appen slettes og oprettes igen. Et push til `feature/supabase-auth` redeployer kun den app, der peger på den branch. Legacy-appen skal blive på sin nuværende branch.
 
-Nulstilling og skift af adgangskode i UI afviser enhver anden vært end preview. Login, profil, entitlement og logout følger den konfigurerede Production-URL.
+Nulstilling og logget-ind skift af adgangskode følger det konfigurerede Production-projekt. Den slettede preview afvises. Login, profil, entitlement og logout følger den samme URL.
 
 Registrering er lukket i Auth-mode. Stripe er ikke aktiv.
 
-## Nuværende pilot
+## Pilot 4. november 2026
 
-4. november 2026 blev den første app slettet og oprettet igen, fordi Community Cloud ikke kan skifte branch. Den nuværende app er:
+4. november 2026 blev den første app slettet og oprettet igen, fordi Community Cloud ikke kan skifte branch. Den app pegede da på:
 
 | Felt | Værdi |
 | --- | --- |
@@ -38,6 +38,10 @@ Registrering er lukket i Auth-mode. Stripe er ikke aktiv.
 | Entrypoint | `app.py` |
 | Python | 3.14 |
 | Legacy | `traderdash-market` er ikke ændret og peger stadig på `master` |
+
+## Nuværende pilot
+
+9. november 2026 blev samme URL oprettet igen på `feature/public-pilot-finalization`, `app.py` og Python 3.14. Legacy er stadig `master`. Registrering er lukket. Den senere test står i `CONTROLLED_SIGNUP.md`.
 
 Nulstillingen er prøvet én gang samme dag. Resend leverede mailen fra `noreply@auth.markettools.app`. Detaljerne står i `AUTH_EMAIL_RECOVERY.md`. Tabellen øverst beskriver den første oprettelse og er ikke den nuværende kilde.
 

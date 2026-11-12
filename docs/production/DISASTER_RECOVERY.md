@@ -169,8 +169,8 @@ Værdierne ligger ikke her og blev ikke læst fra en adgangskodehuske.
 
 ## Kendt sag ved siden af
 
-Logget-ind skift af adgangskode afviser stadig enhver anden vært end den slettede preview. Det er ikke nulstillingsmailen. Nulstillingen er prøvet og virker på piloten. Sagen hører til kontolivscyklus før en offentlig lancering og blokerer ikke denne gendannelse.
+Logget-ind skift af adgangskode bruger det konfigurerede Supabase-projekt og afviser den slettede preview. Nulstillingen er prøvet og virker på piloten. En rigtig adgangskodeskift af den eksisterende pilot er ikke udført.
 
 ## Kontakter
 
-GitHub: `market-tools-lab/TraderDash`. Supabase: projektet Traderdash. Streamlit Community Cloud: `traderdash-market` på `master` og `traderdash-next` på `feature/auth-email-recovery`, begge `app.py` og Python 3.14. Resend: afsender `noreply@auth.markettools.app`. Cloudflare: `markettools.app` og `auth.markettools.app`.
+GitHub: `market-tools-lab/TraderDash`. Supabase: projektet Traderdash. Streamlit Community Cloud: `traderdash-market` på `master` og `traderdash-next` på `feature/public-pilot-finalization`, begge `app.py` og Python 3.14. Resend: afsender `noreply@auth.markettools.app`. Cloudflare: `markettools.app` og `auth.markettools.app`.

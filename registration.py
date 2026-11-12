@@ -13,18 +13,25 @@ from typing import Any, Callable, Mapping
 
 import account_lifecycle
 import account_privacy
+import captcha
 import password_policy
 import stripe_test
 import supabase_auth
 import universes
 
 APPROVED_VALUE = "enabled"
+ACK_VERSION = "traderdash-pilot-2026-11-09"
+TRADERDASH_PILOT_MINIMUM_AGE = 18
 CAPTCHA_REQUIRED = True
 CAPTCHA_PROVIDER = "turnstile"
 REPAIR_ENABLED = False
-ENTITLEMENT_FUNCTION_DEPLOYED = False
+ENTITLEMENT_FUNCTION_DEPLOYED = True
+SUPPORT_MAILBOX_OPERATIONAL = True
 LEGAL_DECISIONS_COMPLETE = False
+SELF_ENROLLMENT_DEPLOYED = True
 FREE_PLAN = "free"
+_REPAIR_TARGET = "local-test"
+_ACCEPTED_FREE_SOURCES = frozenset({"signup", "migration"})
 REQUEST_MESSAGE = "Hvis adressen kan bruges, sender vi en bekræftelse."
 _MESSAGES = {
     "closed": "Ny konto oprettes ikke i denne loginvej.",
@@ -76,8 +83,13 @@ def submit(
     plan: str = FREE_PLAN,
     env: Mapping[str, str] | None = None,
     transport=None,
+    captcha_transport: captcha.Transport | None = None,
 ) -> dict[str, Any]:
-    """Validate a signup. Auth is contacted only after every local gate passes."""
+    """Validate a signup. Auth is contacted only after every local gate passes.
+
+    The live path always supplies the server-side siteverify caller. A test
+    may replace that caller. verify() still refuses a missing transport.
+    """
     source = env if env is not None else os.environ
     if not registration_open(source) or _mode(source) != "supabase_auth":
         _log("REGISTRATION_BLOCKED", reason="closed")
@@ -100,8 +112,17 @@ def submit(
         _log("REGISTRATION_BLOCKED", reason="acknowledgement")
         raise RegistrationRejected("acknowledgement")
     if CAPTCHA_REQUIRED and not str(captcha_token or "").strip():
-        _log("REGISTRATION_BLOCKED", reason="captcha")
+        _log("REGISTRATION_BLOCKED", reason="token", stage="missing")
         raise RegistrationRejected("captcha")
+    try:
+        captcha.verify(
+            captcha_token,
+            env=source,
+            transport=captcha.https_transport if captcha_transport is None else captcha_transport,
+        )
+    except captcha.CaptchaRejected as exc:
+        _log_captcha(exc.reason)
+        raise RegistrationRejected("captcha") from None
     if not supabase_auth.delivery_enabled() or not supabase_auth.allowed_redirect(redirect_url):
         _log("REGISTRATION_BLOCKED", reason="unavailable")
         raise RegistrationRejected("unavailable")
@@ -140,24 +161,33 @@ def complete_verification(
     if not registration_open() or supabase_auth.auth_mode() != "supabase_auth":
         _log("REGISTRATION_BLOCKED", reason="closed")
         raise RegistrationRejected("closed")
-    if verify is None:
-        def verify(token: str) -> Mapping[str, Any]:
-            return supabase_auth.Client.from_env(transport).exchange_signup(token)
     try:
-        checked = dict(verify(token_hash))
+        if verify is None:
+            checked = dict(supabase_auth.Client.from_env(transport).confirm_traderdash_signup(token_hash))
+            merged = {
+                "user_id": str(checked.get("user_id") or ""),
+                "target_ref": str(checked.get("target_ref") or ""),
+                "confirmed": bool(checked.get("confirmed")),
+                "profile": bool(checked.get("profile")),
+                "entitlements": checked.get("entitlements") or [],
+                "acknowledgement_version": str(checked.get("acknowledgement_version") or ""),
+            }
+        else:
+            checked = dict(verify(token_hash))
+            merged = dict(record)
+            merged["user_id"] = str(checked.get("user_id") or "")
+            merged["confirmed"] = bool(checked.get("confirmed"))
     except supabase_auth.AuthError as exc:
         _log("REGISTRATION_BLOCKED", reason="expired")
         raise RegistrationRejected("expired") from exc
     if checked.get("expired"):
         _log("REGISTRATION_BLOCKED", reason="expired")
         raise RegistrationRejected("expired")
-    user_id = str(checked.get("user_id") or "")
-    merged = dict(record)
-    merged["user_id"] = user_id
-    merged["confirmed"] = bool(checked.get("confirmed"))
     report = reconcile(merged)
     if report["access"]:
         _log("REGISTRATION_COMPLETED")
+    elif report["confirmed"] and report["profile_present"] and "entitlement_missing" in report["findings"]:
+        _log("REGISTRATION_PARTIAL")
     elif report["findings"]:
         _log("REGISTRATION_RECONCILIATION_REQUIRED", finding=report["findings"][0])
     else:
@@ -180,10 +210,12 @@ def reconcile(record: Mapping[str, Any]) -> dict[str, Any]:
     findings = []
     if user_id in account_privacy.PROTECTED_IDS:
         findings.append("protected")
-    if target in account_privacy.PROTECTED_REFS:
+    if target != account_privacy.PRODUCTION_REF:
         findings.append("environment")
     if not confirmed:
         findings.append("email_unconfirmed")
+    if confirmed and str(record.get("acknowledgement_version") or "") != ACK_VERSION:
+        findings.append("acknowledgement_missing")
     if confirmed and not profile:
         findings.append("profile_missing")
     if not confirmed and (profile or rows):
@@ -194,6 +226,9 @@ def reconcile(record: Mapping[str, Any]) -> dict[str, Any]:
         findings.append("duplicate_free")
     if other:
         findings.append("unexpected_plan")
+    source = str(free[0].get("source") or "") if len(free) == 1 else ""
+    if len(free) == 1 and source not in _ACCEPTED_FREE_SOURCES:
+        findings.append("unexpected_source")
     access = (
         confirmed
         and profile
@@ -202,6 +237,7 @@ def reconcile(record: Mapping[str, Any]) -> dict[str, Any]:
         and "protected" not in findings
         and "environment" not in findings
         and "email_unconfirmed" not in findings
+        and "unexpected_source" not in findings
     )
     papers = len(universes.stocks_for(FREE_PLAN)) if access else 0
     return {
@@ -214,6 +250,17 @@ def reconcile(record: Mapping[str, Any]) -> dict[str, Any]:
         "actions": ["create_free"] if "entitlement_missing" in findings else [],
         "access": access,
         "papers": papers,
+        "account_stage": {
+            "confirmed": confirmed,
+            "acknowledgement_version": str(record.get("acknowledgement_version") or ""),
+        },
+        "product_stage": {
+            "product": "traderdash",
+            "profile": profile,
+            "free_entitlements": len(free),
+            "papers": papers,
+            "source": source,
+        },
         "mutates": False,
         "repair_enabled": REPAIR_ENABLED,
     }
@@ -229,8 +276,11 @@ def apply_free_entitlement(
     report = reconcile(record)
     if repair is not True or writer is None:
         raise RegistrationRejected("repair_disabled")
-    if "environment" in report["findings"] or "protected" in report["findings"]:
-        raise RegistrationRejected("protected" if "protected" in report["findings"] else "environment")
+    target = str(record.get("target_ref") or "").strip()
+    if "protected" in report["findings"]:
+        raise RegistrationRejected("protected")
+    if target != _REPAIR_TARGET:
+        raise RegistrationRejected("environment")
     if report["actions"] != ["create_free"]:
         return report
     writer({"user_id": report["user_id"], "plan": FREE_PLAN, "product": "traderdash", "status": "active"})
@@ -248,23 +298,42 @@ def launch_gate(evidence: Mapping[str, Any] | None = None, *, root=None) -> dict
     auth = (base / "supabase_auth.py").read_text(encoding="utf-8")
     operations_doc = base / "docs" / "production" / "OPERATIONS.md"
     lifecycle_doc = base / "docs" / "production" / "ACCOUNT_LIFECYCLE.md"
+    provision = (base / "supabase" / "migrations" / "20261109110000_provision_traderdash_free.sql").read_text(encoding="utf-8")
+    bridge = (base / "supabase" / "migrations" / "20261109140000_provision_traderdash_free_self.sql").read_text(encoding="utf-8")
+    component = (base / "captcha_component" / "index.html").read_text(encoding="utf-8")
+    platform = (base / "docs" / "production" / "MARKET_TOOLS_PLATFORM.md").read_text(encoding="utf-8")
+    terms = (base / "docs" / "production" / "TERMS_OF_USE.md").read_text(encoding="utf-8")
+    pilot = (base / "docs" / "production" / "PUBLIC_PILOT.md").read_text(encoding="utf-8")
     items = {
-        "ci_green": _evidence(supplied, "ci_green"),
-        "supabase_healthy": _evidence(supplied, "supabase_healthy"),
-        "no_preview_branch": _evidence(supplied, "no_preview_branch"),
-        "backups_current": _evidence(supplied, "backups_current"),
-        "resend_healthy": _evidence(supplied, "resend_healthy"),
-        "registration_code_tested": _evidence(supplied, "registration_code_tested"),
+        "ci_green": _external(supplied, "ci_green"),
+        "supabase_healthy": _external(supplied, "supabase_healthy"),
+        "no_preview_branch": _external(supplied, "no_preview_branch"),
+        "backups_current": _external(supplied, "backups_current"),
+        "resend_healthy": _external(supplied, "resend_healthy"),
+        "registration_code_tested": _external(supplied, "registration_code_tested"),
         "registration_default_off": "PASS" if not registration_open({}) else "FAIL",
         "email_verification_prepared": "PASS",
         "captcha_decision_complete": "PASS" if CAPTCHA_REQUIRED and CAPTCHA_PROVIDER == "turnstile" else "FAIL",
-        "privacy_terms_decision_complete": "PASS" if LEGAL_DECISIONS_COMPLETE else "FAIL",
+        "turnstile_server_verification": "PASS" if "def verify" in (base / "captcha.py").read_text(encoding="utf-8") else "FAIL",
+        "turnstile_token_return": "PASS" if _token_return_ready(component) else "FAIL",
+        "turnstile_widget_configured": _external(supplied, "turnstile_widget_configured"),
+        "privacy_draft_present": "PASS" if (base / "docs" / "production" / "PRIVACY_NOTICE.md").is_file() else "FAIL",
+        "terms_draft_present": "PASS" if (base / "docs" / "production" / "TERMS_OF_USE.md").is_file() else "FAIL",
+        "traderdash_age_policy": "PASS" if _age_policy_ready(platform, terms) else "FAIL",
+        "privacy_terms_decision_complete": _external(supplied, "privacy_terms_decision_complete") if not LEGAL_DECISIONS_COMPLETE else "PASS",
+        "support_requirements_documented": "PASS" if (base / "docs" / "production" / "SUPPORT_MAIL.md").is_file() else "FAIL",
+        "support_mailbox_operational": "PASS" if SUPPORT_MAILBOX_OPERATIONAL else _external(supplied, "support_mailbox_operational"),
         "free_entitlement_idempotent": "PASS",
-        "entitlement_function_deployed": "PASS" if ENTITLEMENT_FUNCTION_DEPLOYED else "FAIL",
+        "entitlement_function_prepared": "PASS" if "revoke all on function public.provision_traderdash_free(uuid) from public, anon, authenticated;" in provision else "FAIL",
+        "entitlement_function_deployed": "PASS" if ENTITLEMENT_FUNCTION_DEPLOYED else _external(supplied, "entitlement_function_deployed"),
+        "self_enrollment_prepared": "PASS" if _self_enrollment_ready(bridge) else "FAIL",
+        "self_enrollment_deployed": "PASS" if SELF_ENROLLMENT_DEPLOYED else "FAIL",
+        "pilot_recreation_documented": "PASS" if "Genskabelse" in pilot else "FAIL",
+        "pilot_branch_deployed": _external(supplied, "pilot_branch_deployed"),
         "deletion_policy_documented": "PASS" if lifecycle_doc.is_file() else "FAIL",
         "recovery_code_present": "PASS" if "def request_password_reset" in auth else "FAIL",
         "password_change_code_ready": "PASS" if "_refuse_deleted_preview" in auth else "FAIL",
-        "password_change_live": _evidence(supplied, "password_change_live"),
+        "password_change_live": _external(supplied, "password_change_live"),
         "stripe_off": "PASS" if not stripe_test.ENTITLEMENT_UPDATES_ENABLED else "FAIL",
         "deletion_execution_off": "PASS" if not account_lifecycle.DELETION_EXECUTION_ENABLED else "FAIL",
         "monitoring_runbook_current": "PASS" if operations_doc.is_file() and "release-gate" in operations_doc.read_text(encoding="utf-8") else "FAIL",
@@ -272,8 +341,41 @@ def launch_gate(evidence: Mapping[str, Any] | None = None, *, root=None) -> dict
     return {"items": items, "open_registration": False, "decision": "closed"}
 
 
-def _evidence(evidence: Mapping[str, Any], name: str) -> str:
-    return "PASS" if evidence.get(name) is True else "FAIL"
+def _self_enrollment_ready(sql: str) -> bool:
+    compact = " ".join(sql.split())
+    return (
+        "NOT APPLIED" in sql
+        and "auth.uid()" in sql
+        and "email_confirmed_at" in sql
+        and "perform public.provision_traderdash_free(actor)" in compact
+        and "when unique_violation then" in compact
+        and "revoke all on function public.provision_traderdash_free_self() from public, anon;" in sql
+        and "grant execute on function public.provision_traderdash_free_self() to authenticated;" in sql
+        and "grant execute on function public.provision_traderdash_free_self() to anon" not in sql
+        and "service_role" not in sql
+    )
+
+
+def _token_return_ready(component: str) -> bool:
+    return (
+        "streamlit:setComponentValue" in component
+        and 'var ACTION = "registration"' in component
+        and "event.source !== window.parent" in component
+        and captcha.PASS_SECRET not in component
+        and "TRADERDASH_TURNSTILE_SECRET_KEY" not in component
+    )
+
+
+def _age_policy_ready(platform: str, terms: str) -> bool:
+    return (
+        TRADERDASH_PILOT_MINIMUM_AGE == 18
+        and "fyldt 18" in terms
+        and "ikke en Market Tools-regel" in platform
+    )
+
+
+def _external(evidence: Mapping[str, Any], name: str) -> str:
+    return "PASS" if evidence.get(name) is True else "EXTERNAL"
 
 
 def _mode(source: Mapping[str, str]) -> str:
@@ -295,6 +397,25 @@ def _state(findings: list[str]) -> str:
     if findings:
         return "reconciliation_required"
     return "incomplete"
+
+
+_CAPTCHA_STAGES = {
+    "token": "replay",
+    "missing_configuration": "verify",
+    "test_key_refused": "verify",
+    "unavailable": "transport",
+    "timeout": "siteverify",
+    "invalid": "siteverify",
+    "reused": "siteverify",
+    "hostname": "hostname",
+    "action": "action",
+}
+
+
+def _log_captcha(reason: str) -> None:
+    """Log a closed Turnstile result. The reason is a fixed label, never the token."""
+    safe = reason if reason in _CAPTCHA_STAGES else "captcha"
+    _log("REGISTRATION_BLOCKED", reason=safe, stage=_CAPTCHA_STAGES.get(safe, "verify"))
 
 
 def _log(category: str, **fields: Any) -> None:

@@ -11,6 +11,7 @@ import streamlit as st
 import access
 import account_page
 import accounts
+import captcha
 import operations
 import registration
 import supabase_auth
@@ -645,20 +646,32 @@ def _render_supabase_reset() -> None:
 
 def _render_supabase_registration() -> None:
     with st.form("auth_register"):
+        token = captcha.render_widget(captcha.site_key())
+        if token is None:
+            st.caption("Bekræftelsen er ikke sat op.")
+            token = ""
+        token = captcha.remember_token(st.session_state, token)
         email = st.text_input("E-mail", key="auth_register_email")
         password = st.text_input("Adgangskode", type="password", key="auth_register_password")
         confirmation = st.text_input("Gentag adgangskode", type="password", key="auth_register_confirmation")
-        acknowledged = st.checkbox("Jeg accepterer, at privatlivsteksten endnu er et udkast.", key="auth_register_ack")
+        acknowledged = st.checkbox(
+            "Jeg bekræfter, at jeg er fyldt 18 år og må deltage i TraderDash-piloten. "
+            f"Jeg accepterer udkastet til privatlivsnotits og vilkår, version {registration.ACK_VERSION}. "
+            "Teksten er ikke en endelig politik.",
+            key="auth_register_ack",
+        )
         submitted = st.form_submit_button("Opret konto")
     if not submitted:
         return
+    held = token
+    captcha.discard_token(st.session_state)
     try:
         result = registration.submit(
             email,
             password,
             confirmation,
             acknowledged=bool(acknowledged),
-            captcha_token=str(st.session_state.get("auth_register_captcha") or ""),
+            captcha_token=held,
             redirect_url=supabase_auth.configured_redirect(),
         )
     except registration.RegistrationRejected as exc:
@@ -676,7 +689,7 @@ def _render_signup_verification() -> None:
         _render_supabase_login()
         return
     try:
-        result = registration.complete_verification(token, {"target_ref": supabase_auth.project_ref(), "profile": False})
+        result = registration.complete_verification(token, {})
     except registration.RegistrationRejected as exc:
         st.error(str(exc))
     else:
@@ -838,6 +851,7 @@ if supabase_auth.auth_mode() == "supabase_auth":
         _clear_user_session(logout=True)
         _render_supabase_login()
         st.stop()
+    supabase_session = supabase_auth.continue_traderdash_enrollment(supabase_session)
     if supabase_session.profile_id != supabase_session.user_id:
         operations.log_event("ENTITLEMENT_FAILURE", where="profile")
         st.error("Kontoen er ikke klar.")

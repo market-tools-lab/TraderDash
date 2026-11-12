@@ -5,10 +5,15 @@ from __future__ import annotations
 import os
 import unittest
 import urllib.parse
+from contextlib import redirect_stderr
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
+import account_lifecycle
 import password_policy
+import registration
+import stripe_test
 import supabase_auth
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -207,6 +212,98 @@ class ResetFlowTests(unittest.TestCase):
         self.assertNotIn("next_password", state)
         self.assertNotIn(supabase_auth.TOKEN_KEY, state)
 
+    def test_logged_in_change_keeps_a_14_character_password_until_validation(self):
+        entered = "Ab-12-cdefghij"
+        self.assertEqual(len(entered), 14)
+        state = {
+            supabase_auth.TOKEN_KEY: "session-token",
+            "login_password": "login-secret-99",
+            "next_password": entered,
+            "next_confirmation": entered,
+        }
+        session = supabase_auth.AuthSession(
+            user_id="user-1",
+            email="person@example.invalid",
+            access_token="session-token",
+            plan="free",
+            profile_id="user-1",
+        )
+        supabase_auth.remember(session, state)
+        self.assertEqual(state["next_password"], entered)
+        self.assertEqual(state["next_confirmation"], entered)
+        self.assertNotIn("login_password", state)
+
+        calls = []
+
+        def transport(method, url, headers, body):
+            calls.append((method, url, body))
+            return 200, {"id": "user-1"}
+
+        stream = StringIO()
+        pilot = dict(ENV, TRADERDASH_SUPABASE_URL=PRODUCTION_URL)
+        with patch.dict(os.environ, pilot), redirect_stderr(stream):
+            supabase_auth.change_password(
+                "session-token",
+                state["next_password"],
+                state["next_confirmation"],
+                transport=transport,
+            )
+        self.assertEqual(calls[0][0], "PUT")
+        self.assertEqual(calls[0][2], {"password": entered})
+        self.assertNotIn(entered, stream.getvalue())
+        supabase_auth.forget_password(state)
+        self.assertNotIn("next_password", state)
+        self.assertNotIn("next_confirmation", state)
+        self.assertNotIn(entered, str(state))
+
+    def test_logged_in_change_uses_the_shared_length_rule(self):
+        samples = {
+            0: "",
+            11: "Ab-12-cdefg",
+            12: "Ab-12-cdefgh",
+            14: "Ab-12-cdefghij",
+            128: ("Ab-12-cdefgh" * 11)[:128],
+            129: ("Ab-12-cdefgh" * 11)[:128] + "x",
+        }
+        for length, value in samples.items():
+            self.assertEqual(len(value), length)
+
+        def refuse(method, url, headers, body):
+            raise AssertionError("request was sent")
+
+        pilot = dict(ENV, TRADERDASH_SUPABASE_URL=PRODUCTION_URL)
+        with patch.dict(os.environ, pilot):
+            for length in (0, 11, 129):
+                value = samples[length]
+                with self.assertRaises(supabase_auth.AuthError) as raised:
+                    supabase_auth.change_password("session-token", value, value, transport=refuse)
+                self.assertEqual(str(raised.exception), "Adgangskoden skal være mellem 12 og 128 tegn.")
+                if value:
+                    self.assertNotIn(value, str(raised.exception))
+            with self.assertRaises(supabase_auth.AuthError) as mismatch:
+                supabase_auth.change_password(
+                    "session-token",
+                    samples[14],
+                    samples[12],
+                    transport=refuse,
+                )
+            self.assertEqual(str(mismatch.exception), "Adgangskoderne er ikke ens.")
+
+        def accept(method, url, headers, body):
+            self.assertEqual(set(body), {"password"})
+            self.assertNotIn("entitlement", url)
+            self.assertTrue(url.endswith("/auth/v1/user"))
+            return 200, {"id": "user-1"}
+
+        with patch.dict(os.environ, pilot):
+            for length in (12, 14, 128):
+                value = samples[length]
+                supabase_auth.change_password("session-token", value, value, transport=accept)
+        self.assertFalse(registration.registration_open({}))
+        self.assertFalse(stripe_test.ENTITLEMENT_UPDATES_ENABLED)
+        self.assertFalse(account_lifecycle.DELETION_UI_ENABLED)
+        self.assertFalse(account_lifecycle.DELETION_EXECUTION_ENABLED)
+
     def test_deleted_preview_is_not_a_password_change_target(self):
         def transport(method, url, headers, body):
             raise AssertionError("request was sent")
@@ -321,9 +418,14 @@ class RecoveryTests(unittest.TestCase):
         reset_text = (directory / "password-reset.txt").read_text(encoding="utf-8")
         reset_html = (directory / "password-reset.html").read_text(encoding="utf-8")
         changed = (directory / "password-changed.txt").read_text(encoding="utf-8")
-        for body in (reset_text, reset_html):
+        signup_text = (directory / "signup-confirmation.txt").read_text(encoding="utf-8")
+        signup_html = (directory / "signup-confirmation.html").read_text(encoding="utf-8")
+        for body in (reset_text, reset_html, signup_text, signup_html):
             self.assertIn("{{ .TokenHash }}", body)
             self.assertIn("{{ .RedirectTo }}", body)
             self.assertNotIn("wxvobyifckbpnqfbnlxl", body)
             self.assertNotIn("eyJ", body)
+            self.assertNotIn("ConfirmationURL", body)
+        self.assertIn("type=signup", signup_text)
+        self.assertIn("type=signup", signup_html)
         self.assertIn("ikke til udsendelse", changed.lower())

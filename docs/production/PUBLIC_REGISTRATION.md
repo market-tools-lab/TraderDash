@@ -8,7 +8,7 @@ Registrering er lukket. Denne tekst åbner den ikke. Ingen mail er sendt, ingen 
 
 `TRADERDASH_AUTH_REGISTRATION=enabled` er den eneste værdi, der gør koden klar. Manglende værdi, `disabled` og enhver anden tekst er lukket. Legacy læser ikke flaget. `traderdash-market` beholder sin egen `Opret konto`.
 
-Koden er ikke nok. Et kald kræver også `supabase_auth`, begge leveringskontakter, en allowlistet redirect og et ikke-tomt CAPTCHA-token. Den forberedte formular har ikke et CAPTCHA-felt, så den kan ikke sende et kald, selv hvis flaget senere sættes.
+Koden er ikke nok. Et kald kræver også `supabase_auth`, begge leveringskontakter, en allowlistet redirect og et token, som serveren har godkendt. Uden det token sender formularen ikke et Auth-kald.
 
 Sundhedstjekket bliver `not_ready`, hvis flaget er `enabled` eller en ukendt værdi. Det er et driftssignal.
 
@@ -22,7 +22,7 @@ Den synlige tekst ved et kald er "Hvis adressen kan bruges, sender vi en bekræf
 
 ## Data
 
-Profilen oprettes af den eksisterende trigger `handle_new_user` i samme databasettransaktion som Auth-brugeren. Entitlement kan den indloggede rolle ikke skrive. Derfor kan appen ikke selv oprette Free-rækken. `apply_free_entitlement` kan kun kaldes med en indsprøjtet skriver, og den afviser Production, den slettede preview og de beskyttede id'er. Appen kalder den ikke. En senere security-definer-funktion er en særskilt deploy og er ikke skrevet her.
+Profilen oprettes af den eksisterende trigger `handle_new_user` i samme databasettransaktion som Auth-brugeren. Entitlement oprettes først bagefter, og kun for TraderDash. `provision_traderdash_free_self()` læser den bekræftede bruger fra databasen og kalder den eksisterende funktion for netop den bruger. `anon` kan ikke kalde den. Den brede funktion med et vilkårligt id er stadig lukket for `anon` og `authenticated`. `apply_free_entitlement` er kun en testskriver. Den kan ikke skrive i Production, den slettede preview eller for et beskyttet id. Appen kalder den ikke som en reparationsskriver. Den nye funktion er kørt på Production som `20261109121539`. Registrering er stadig lukket.
 
 Free er den eneste plan. Den giver 30 papirer. Nordic, International og Stripe kan ikke vælges i tilmeldingen.
 
@@ -46,3 +46,5 @@ Supabase Auth understøtter hCaptcha og Cloudflare Turnstile som CAPTCHA på sig
 Launch-listen i `registration.launch_gate` bliver ved med at svare `closed`. Den kan ikke åbne registrering. Privatlivstekst, vilkår, databehandler og slettebeskrivelse er forretningsbeslutninger og er ikke skrevet som endelig tekst. CAPTCHA-kontoen, entitlement-funktionen og en bevidst ændring af sundhedstjekket mangler også.
 
 Lukning er at fjerne `TRADERDASH_AUTH_REGISTRATION` eller sætte den til `disabled`. Legacy-appen kræver ingen ændring.
+
+Serverkontrollen af Turnstile er forberedt på `feature/public-pilot-finalization`. Funktionen `provision_traderdash_free` er kørt på Production og ændrer ikke den lukkede registrering. Widgettet er oprettet eksternt. Tokenet kan returneres fra en isoleret komponent, og serveren skal stadig godkende det.

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { margin: 0; background: transparent; }
+  </style>
+</head>
+<body>
+  <div id="widget"></div>
+  <script>
+    (function () {
+      var ACTION = "registration";
+      var rendered = false;
+      var latest = null;
+      var held = "";
+
+      function send(type, data) {
+        var payload = { isStreamlitMessage: true, type: type };
+        if (data) {
+          Object.keys(data).forEach(function (key) { payload[key] = data[key]; });
+        }
+        window.parent.postMessage(payload, "*");
+      }
+
+      function publish(value) {
+        send("streamlit:setComponentValue", { value: value, dataType: "json" });
+      }
+
+      function deliver(token) {
+        held = token;
+        publish(token);
+        var tries = 0;
+        var timer = window.setInterval(function () {
+          tries += 1;
+          if (tries > 2 || held !== token) {
+            window.clearInterval(timer);
+            return;
+          }
+          publish(token);
+        }, 250);
+      }
+
+      function siteKeyOk(value) {
+        return typeof value === "string" && /^[0-9A-Za-z_-]{10,80}$/.test(value);
+      }
+
+      function mount() {
+        if (rendered || !latest || latest.action !== ACTION || !siteKeyOk(latest.sitekey) || !window.turnstile) {
+          return;
+        }
+        rendered = true;
+        window.turnstile.render(document.getElementById("widget"), {
+          sitekey: latest.sitekey,
+          action: ACTION,
+          callback: function (token) {
+            if (typeof token === "string" && token) {
+              deliver(token);
+            }
+          },
+          "expired-callback": function () { held = ""; publish(""); },
+          "error-callback": function () { held = ""; publish(""); }
+        });
+        send("streamlit:setFrameHeight", { height: 80 });
+      }
+
+      function load() {
+        var script = document.createElement("script");
+        script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+        script.async = true;
+        script.setAttribute("data-turnstile", "registration");
+        script.onload = mount;
+        script.onerror = function () { held = ""; publish(""); };
+        document.head.appendChild(script);
+      }
+
+      window.addEventListener("message", function (event) {
+        if (!event.data || event.data.type !== "streamlit:render" || event.source !== window.parent) {
+          return;
+        }
+        latest = event.data.args || null;
+        if (window.turnstile) {
+          mount();
+        } else if (!document.querySelector("script[data-turnstile]")) {
+          load();
+        }
+      });
+
+      send("streamlit:componentReady", { apiVersion: 1 });
+      send("streamlit:setFrameHeight", { height: 80 });
+    })();
+  </script>
+</body>

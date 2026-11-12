@@ -58,7 +58,7 @@ Valgt og prøvet: Resend.
 
 Postmark var det første skriftlige forslag og er ikke den udbyder, der blev sat op. Sammenligningen ovenfor bliver stående som baggrund. Supabase' indbyggede afsender og Amazon SES er stadig ikke valgt.
 
-Sporing på login-mail skal blive slået fra hos Resend, hvis den ikke allerede er det. Det er ikke genlæst i udbyderens konto i denne note.
+9. november 2026 så Theis Resend-konfigurationen for `auth.markettools.app`. Tracking metrics er ikke slået til. Open tracking og click tracking er derfor fra. Configure blev ikke brugt. Forge er Enabled, og TLS er Opportunistic. Ingen indstilling blev ændret i den gennemgang.
 
 ## DNS
 

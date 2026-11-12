@@ -2,8 +2,9 @@
 
 This module is used only when TRADERDASH_AUTH_MODE is supabase_auth.
 A missing or unknown mode stays on the legacy login. The module reads the
-signed-in user's profile and TraderDash entitlement. It does not write
-entitlements, and it does not keep the password.
+signed-in user's profile and TraderDash entitlement. The only product write
+is the zero-argument enrollment call, which the database runs as that user.
+It does not keep the password.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlsplit
 
+import account_privacy
 import password_policy
 from account_store import User
 
@@ -80,11 +82,18 @@ def forget_password(state: MutableMapping[str, Any]) -> None:
         state.pop(key, None)
 
 
+# The logged-in change form is drawn after load_saved_session. Clearing these
+# keys there deletes the submitted values before the widgets can read them.
+_KEEP_UNTIL_PASSWORD_FORM = frozenset({"next_password", "next_confirmation"})
+
+
 def remember(session: "AuthSession", state: MutableMapping[str, Any]) -> None:
     state[TOKEN_KEY] = session.access_token
     state[USER_KEY] = session.user_id
     state[EMAIL_KEY] = session.email
-    forget_password(state)
+    for key in PASSWORD_KEYS:
+        if key not in _KEEP_UNTIL_PASSWORD_FORM:
+            state.pop(key, None)
 
 
 def clear_local(state: MutableMapping[str, Any]) -> None:
@@ -93,13 +102,16 @@ def clear_local(state: MutableMapping[str, Any]) -> None:
 
 
 def plan_from_entitlements(rows: list[dict[str, Any]] | None, now: datetime | None = None) -> str | None:
-    """Active TraderDash plan, or None when access must stay closed."""
+    """The one active TraderDash plan. Several active rows stay closed."""
     moment = now or datetime.now(timezone.utc)
+    found = []
     for row in rows or []:
         plan = _plan_from_row(row, moment)
         if plan is not None:
-            return plan
-    return None
+            found.append(plan)
+    if len(found) != 1:
+        return None
+    return found[0]
 
 
 def sign_in(email: str, password: str, *, transport=None) -> "AuthSession | None":
@@ -122,6 +134,43 @@ def load_saved_session(state: MutableMapping[str, Any], *, transport=None) -> "A
         return None
     remember(session, state)
     return session
+
+
+def continue_traderdash_enrollment(
+    session: "AuthSession | None",
+    *,
+    transport=None,
+) -> "AuthSession | None":
+    """Enroll this confirmed user once when TraderDash Free is still missing."""
+    if session is None or session.plan is not None or not session.profile_id:
+        return session
+    if getattr(session, "confirmed", True) is False:
+        _ops("PRODUCT_ENROLLMENT_BLOCKED", reason="unconfirmed")
+        return session
+    client = Client.from_env(transport)
+    if not client.allows_product_enrollment():
+        return session
+    try:
+        rows = client.read_entitlements(session.access_token)
+    except AuthError:
+        _ops("ENTITLEMENT_FAILURE", where="self_enrollment")
+        return session
+    if rows:
+        if _active_enrollment_block(rows) == "unexpected_plan":
+            _ops("PRODUCT_ENROLLMENT_BLOCKED", reason="unexpected_plan")
+        return session
+    _ops("PRODUCT_ENROLLMENT_REQUEST")
+    try:
+        client.enroll_self(session.access_token)
+    except AuthError:
+        _ops("PRODUCT_ENROLLMENT_BLOCKED", reason="refused")
+        return session
+    _ops("PRODUCT_ENROLLMENT_COMPLETED")
+    try:
+        enrolled = client._session(session.access_token, session.user_id, session.email)
+    except AuthError:
+        return session
+    return enrolled
 
 
 def logout(state: MutableMapping[str, Any], *, transport=None) -> None:
@@ -358,12 +407,14 @@ class AuthSession:
         access_token: str,
         plan: str | None,
         profile_id: str | None,
+        confirmed: bool = True,
     ) -> None:
         self.user_id = user_id
         self.email = email
         self.access_token = access_token
         self.plan = plan
         self.profile_id = profile_id
+        self.confirmed = confirmed
 
     def as_user(self) -> User:
         if self.plan == "free":
@@ -414,7 +465,9 @@ class Client:
         user_id = str(user.get("id") or "")
         if not token or not user_id:
             raise AuthError("Supabase Auth er ikke tilgængelig.")
-        return self._session(token, user_id, str(user.get("email") or email or ""))
+        session = self._session(token, user_id, str(user.get("email") or email or ""))
+        _apply_confirmed(session, user)
+        return session
 
     def session_from_token(self, token: str) -> AuthSession | None:
         status, body = self._request("GET", "/auth/v1/user", token=token)
@@ -425,7 +478,9 @@ class Client:
         user_id = str(body.get("id") or "")
         if not user_id:
             return None
-        return self._session(token, user_id, str(body.get("email") or ""))
+        session = self._session(token, user_id, str(body.get("email") or ""))
+        _apply_confirmed(session, body)
+        return session
 
     def logout(self, token: str) -> None:
         self._request("POST", "/auth/v1/logout", token=token)
@@ -452,7 +507,7 @@ class Client:
 
     def signup(self, email: str, password: str, redirect_url: str, captcha_token: str) -> dict[str, Any]:
         """Create an unconfirmed Auth user. A session in the response is discarded."""
-        from registration import registration_open
+        from registration import ACK_VERSION, registration_open
 
         if self.base_url.rstrip("/") == PREVIEW_ORIGIN or not registration_open():
             raise AuthError("Kontoen kunne ikke oprettes.")
@@ -463,6 +518,7 @@ class Client:
             {
                 "email": str(email or "").strip(),
                 "password": password,
+                "data": {"acknowledgement_version": ACK_VERSION},
                 "gotrue_meta_security": {"captcha_token": str(captcha_token or "")},
             },
         )
@@ -511,6 +567,120 @@ class Client:
         if not user_id:
             raise AuthError("Linket er ikke gyldigt længere.")
         return {"user_id": user_id, "confirmed": True, "expired": False}
+
+    def allows_product_enrollment(self) -> bool:
+        """The deleted preview and every project other than Production stay outside enrollment."""
+        return self._ref() == account_privacy.PRODUCTION_REF and self.base_url != PREVIEW_ORIGIN
+
+    def enroll_self(self, access_token: str) -> None:
+        """Ask the database to enroll this confirmed caller. The body carries no user id."""
+        if not self.allows_product_enrollment():
+            raise AuthError("Kontoen er ikke klar.")
+        token = str(access_token or "").strip()
+        if not token:
+            raise AuthError("Kontoen er ikke klar.")
+        status, _body = self._request(
+            "POST",
+            "/rest/v1/rpc/provision_traderdash_free_self",
+            {},
+            token=token,
+        )
+        if status not in {200, 204}:
+            raise AuthError("Kontoen er ikke klar.")
+
+    def read_entitlements(self, access_token: str) -> list[dict[str, Any]]:
+        _profile, rows = self.read_account(access_token, "")
+        return rows
+
+    def read_account(self, access_token: str, user_id: str) -> tuple[bool, list[dict[str, Any]]]:
+        """Read this caller's profile and entitlements. The token is not returned."""
+        profile_status, profiles = self._request(
+            "GET",
+            "/rest/v1/profiles?select=id",
+            token=access_token,
+        )
+        entitlement_status, rows = self._request(
+            "GET",
+            "/rest/v1/entitlements?select=status,source,products(code),plans(code)",
+            token=access_token,
+        )
+        if profile_status in {401, 403} or entitlement_status in {401, 403}:
+            raise AuthError("Supabase Auth er ikke tilgængelig.")
+        profile = False
+        if user_id and isinstance(profiles, list):
+            profile = any(isinstance(row, dict) and row.get("id") == user_id for row in profiles)
+        normalized: list[dict[str, Any]] = []
+        if isinstance(rows, list):
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                normalized.append(
+                    {
+                        "status": row.get("status"),
+                        "source": row.get("source"),
+                        "product": _nested_code(row.get("products")),
+                        "plan": _nested_code(row.get("plans")),
+                    }
+                )
+        return profile, normalized
+
+    def confirm_traderdash_signup(self, token_hash: str) -> dict[str, Any]:
+        """Confirm the Auth address, enroll TraderDash, then drop the session."""
+        from registration import registration_open
+
+        if not self.allows_product_enrollment() or not registration_open():
+            raise AuthError("Linket er ikke gyldigt længere.")
+        if not str(token_hash or "").strip():
+            raise AuthError("Linket er ikke gyldigt længere.")
+        status, body = self._request(
+            "POST",
+            "/auth/v1/verify",
+            {"type": "signup", "token_hash": str(token_hash)},
+        )
+        if status != 200 or not isinstance(body, dict):
+            raise AuthError("Linket er ikke gyldigt længere.")
+        user = body.get("user") if isinstance(body.get("user"), dict) else {}
+        user_id = str(user.get("id") or "")
+        if not user_id:
+            raise AuthError("Linket er ikke gyldigt længere.")
+        access_token = str(body.get("access_token") or "")
+        metadata = user.get("user_metadata") if isinstance(user.get("user_metadata"), dict) else {}
+        confirmed = bool(user.get("email_confirmed_at") or user.get("confirmed_at"))
+        profile = False
+        entitlements: list[dict[str, Any]] = []
+        try:
+            _ops("REGISTRATION_VERIFIED")
+            if not access_token:
+                _ops("PRODUCT_ENROLLMENT_BLOCKED", reason="session")
+            else:
+                _ops("PRODUCT_ENROLLMENT_REQUEST")
+                try:
+                    self.enroll_self(access_token)
+                    _ops("PRODUCT_ENROLLMENT_COMPLETED")
+                except AuthError:
+                    _ops("PRODUCT_ENROLLMENT_BLOCKED", reason="refused")
+                profile, entitlements = self.read_account(access_token, user_id)
+        finally:
+            if access_token:
+                try:
+                    self.logout(access_token)
+                except AuthError:
+                    pass
+        return {
+            "user_id": user_id,
+            "confirmed": confirmed,
+            "expired": False,
+            "profile": profile,
+            "entitlements": entitlements,
+            "acknowledgement_version": str(metadata.get("acknowledgement_version") or ""),
+            "target_ref": self._ref(),
+        }
+
+    def _ref(self) -> str:
+        host = (urlsplit(self.base_url).hostname or "").lower()
+        if not host.endswith(".supabase.co"):
+            return ""
+        return host.split(".")[0]
 
     def update_password_from_recovery(self, token: str, new_password: str) -> None:
         if not delivery_enabled():
@@ -589,6 +759,31 @@ class Client:
             "Authorization": f"Bearer {token or self.anon_key}",
         }
         return self.transport(method, self.base_url + path, headers, body)
+
+
+def _apply_confirmed(session: AuthSession, user: Mapping[str, Any]) -> None:
+    """Keep the default when the payload does not say whether the address is confirmed."""
+    if "email_confirmed_at" in user or "confirmed_at" in user:
+        session.confirmed = bool(user.get("email_confirmed_at") or user.get("confirmed_at"))
+
+
+def _active_enrollment_block(rows: list[dict[str, Any]]) -> str | None:
+    """Refuse a second plan. An existing Free row is left to the database function."""
+    active = [row for row in rows if str(row.get("status") or "") == "active"]
+    if not active:
+        return None
+    free = []
+    for row in active:
+        product = str(row.get("product") or "")
+        plan = str(row.get("plan") or "")
+        source = str(row.get("source") or "")
+        if product == TRADERDASH_PRODUCT and plan == "free" and source not in {"subscription", "purchase"}:
+            free.append(row)
+            continue
+        return "unexpected_plan"
+    if len(free) != 1:
+        return "unexpected_plan"
+    return "present"
 
 
 def _plan_from_row(row: dict[str, Any], now: datetime) -> str | None:

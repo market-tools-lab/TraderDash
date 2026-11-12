@@ -2,7 +2,7 @@
 
 Dato: 4. november 2026. Branch: `feature/supabase-auth`.
 
-Denne fil er en kørselsliste. Ingen sætning her er kørt mod Production. Preview er `ajbsoudovxstlolojvte` / `https://ajbsoudovxstlolojvte.supabase.co`.
+Denne fil er kørselslisten. Afsnittene nedenfor siger, hvad der er kørt på Production `wxvobyifckbpnqfbnlxl`. Preview `ajbsoudovxstlolojvte` er slettet og må ikke oprettes igen.
 
 SHA-256 i tabellerne er taget af Windows-arbejdskopierne med CRLF, da filerne blev anvendt. Git gemmer samme SQL-tekst med LF, og testen låser den form. Filnavnets tidsstempel og preview-historikkens version er ikke det samme, fordi preview fik migrationen et senere tidspunkt.
 
@@ -21,7 +21,7 @@ Backup-gaten er grøn. Verified 2026-11-04 på Traderdash / `main` / PRODUCTION.
 | 1 | `supabase/migrations/20261104110000_identity_catalog.sql` | `fdf53d809b5811baf43afe577be9c86e5fe475c5e1fab20b3bacfb6421573951` | `public.users` findes og er urørt. `auth.users` findes | Kørt som `20261104112720` | Kørt som `20261104143544` |
 | 2 | `supabase/migrations/20261104140000_legacy_auth_links.sql` | `671d8e9e7cd6d6e87b3e668b3b3bf5048a817093f55e07dd75c922f018c3a0c9` | Rækkefølge 1. Ingen ændring af `public.users` | Kørt som `20261104130624` | Kørt som `20261104143902` |
 
-Iteration 7 ændrede ikke skemaet. Der er ingen tredje migrationsfil.
+De to senere TraderDash-funktioner står i afsnittene for 9. november. Deres SQL-filer ændres ikke, efter at Production har kørt dem.
 
 Filhovedet i identity catalog siger stadig `NOT APPLIED`. Det er det oprindelige forberedelsesstempel, og den statiske test låser formuleringen. Preview-historikken og Production-historikken er sandheden for de to databaser. Production er kørt som `20261104143544` og `20261104143902`.
 
@@ -75,3 +75,23 @@ Forventet skrivetal for entitlements er 0. `public.users` må have samme rækket
 `docs/production/ROLLBACK.sql` er ikke kørt. Den sletter ikke `public.users` og ikke `auth.users`. En restore fra backup er den foretrukne vej, hvis rækker allerede er migreret. Drop-scriptet er kun til et katalog, der endnu ikke har piloter.
 
 Appens rollback er `TRADERDASH_AUTH_MODE=legacy` eller en fjernet variabel. Cloud sættes ikke i denne iteration.
+
+## Kørt 9. november 2026
+
+| Rækkefølge | Fil | SHA-256 af LF-teksten | Production |
+| --- | --- | --- | --- |
+| 3 | `supabase/migrations/20261109110000_provision_traderdash_free.sql` | `4e32c4e652b6d26b2cc73cc453438fcf0867b37eb84a1d2b25edd26361babbc7` | Kørt som `20261109111918` / `provision_traderdash_free` |
+
+Projekt: Traderdash, `wxvobyifckbpnqfbnlxl`. Tidspunktet i historikken er 2026-11-09 11:19:18 UTC. Filnavnets version er `20261109110000`. Filhovedet siger stadig `NOT APPLIED`. Det er forberedelsesstemplet, og checksummen gælder den kørt tekst. Lokal prøve var bestået forinden og blev ikke gentaget. Efterkontrollen bestod: funktionen findes, `anon` og `authenticated` kan ikke kalde den, og den eksisterende Free-entitlement er uændret.
+
+Funktionen giver én Free-entitlement til TraderDash, når `postgres` eller `service_role` kalder den. Den kørte ikke af sig selv for den eksisterende Auth-bruger. Den ændrer ikke en eksisterende aktiv entitlement.
+
+## Kørt 9. november 2026, selvtilmelding
+
+| Rækkefølge | Fil | SHA-256 af LF-teksten | Production |
+| --- | --- | --- | --- |
+| 4 | `supabase/migrations/20261109140000_provision_traderdash_free_self.sql` | `83dcb6ede525033ced3ce24c1b81f6d753a27581a5a450ca9c2716f3418cf7cb` | Kørt som `20261109121539` / `provision_traderdash_free_self` |
+
+Projekt: Traderdash, `wxvobyifckbpnqfbnlxl`. Tidspunktet i historikken er 2026-11-09 12:15:39 UTC. Filnavnets version er `20261109140000`. Filhovedet siger stadig `NOT APPLIED`. Det er forberedelsesstemplet, og checksummen gælder den uændrede tekst.
+
+Funktionen `provision_traderdash_free_self()` tager intet bruger-id. Den læser `email_confirmed_at` for `auth.uid()` og kalder derefter den allerede kørte funktion for den samme bruger. `anon` kan ikke køre den. `authenticated` kan køre kun denne funktion. `authenticated` kan stadig ikke køre `provision_traderdash_free(uuid)`. `postgres` og `service_role` kan køre den, men kaldet uden en brugeridentitet afvises af funktionen. Efterkontrollen viste én historikpost, ingen ny Auth-bruger, og den eksisterende Free-entitlement med kilden `migration` er uændret. Funktionen blev ikke kaldt for den eksisterende pilot.
