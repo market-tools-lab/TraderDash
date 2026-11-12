@@ -141,6 +141,17 @@ class AppAuthFlowTests(unittest.TestCase):
         self.assertIn("Ny konto oprettes ikke", _texts(at))
         self.assertEqual(at.exception, [])
 
+    def test_signup_callback_is_discarded_while_registration_is_closed(self):
+        at = AppTest.from_file(APP, default_timeout=30)
+        at.query_params["token_hash"] = "signup-hash-should-not-remain"
+        at.query_params["type"] = "signup"
+        at.run()
+        self.assertIn("Ny konto oprettes ikke", _texts(at))
+        self.assertNotIn("signup-hash-should-not-remain", _texts(at))
+        self.assertNotIn("token_hash", list(at.query_params))
+        self.assertNotIn("Opret konto", [button.label for button in at.button])
+        self.assertEqual(at.exception, [])
+
     def test_recovery_link_is_discarded_while_email_delivery_is_off(self):
         at = AppTest.from_file(APP, default_timeout=30)
         at.query_params["token_hash"] = "hash-should-not-remain"

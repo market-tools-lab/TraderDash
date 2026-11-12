@@ -173,4 +173,4 @@ Logget-ind skift af adgangskode bruger det konfigurerede Supabase-projekt og afv
 
 ## Kontakter
 
-GitHub: `market-tools-lab/TraderDash`. Supabase: projektet Traderdash. Streamlit Community Cloud: `traderdash-market` på `master` og `traderdash-next` på `feature/public-pilot-finalization`, begge `app.py` og Python 3.14. Resend: afsender `noreply@auth.markettools.app`. Cloudflare: `markettools.app` og `auth.markettools.app`.
+GitHub: `market-tools-lab/TraderDash`. `master` indeholder pilotkoden efter pull request #8. Streamlit Community Cloud: `traderdash-market` på `master` og `traderdash-next` stadig på `feature/public-pilot-finalization`, begge `app.py` og Python 3.14. Supabase: projektet Traderdash. Resend: afsender `noreply@auth.markettools.app`. Cloudflare: `markettools.app` og `auth.markettools.app`.

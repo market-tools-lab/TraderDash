@@ -6,7 +6,7 @@ Registrering er lukket. `launch_gate` svarer `closed`. Denne tekst åbner den ik
 
 ## Drift
 
-Efter en senere merge skal release-gate være grøn på master. `python -m operations` skal være `ready`, hvilket kræver at `TRADERDASH_AUTH_REGISTRATION` mangler eller er `disabled`. Legacy-appen bliver på `master` og `legacy`. Piloten `traderdash-next` må ikke få registreringsflaget. Stripe og sletning bliver slået fra. Der oprettes ikke en Supabase-preview.
+Pull request #8 er merget til `master`. Release-gate på den merge er grøn. `python -m operations` er `ready`, når `TRADERDASH_AUTH_REGISTRATION` mangler eller er `disabled`. Legacy-appen bliver på `master` og `legacy`. `traderdash-next` er ikke flyttet til `master`. Registreringsflaget forbliver lukket. Stripe og sletning er slået fra. Der oprettes ikke en Supabase-preview.
 
 ## Turnstile
 
@@ -14,7 +14,7 @@ Serverkontrollen ligger i `captcha.py`. Den kalder ikke Cloudflare i test. Widge
 
 Komponenten i `captcha_component/index.html` er en isoleret Streamlit-komponent. Den kan sende tokenet til appen. Serveren skal stadig godkende token, vært og handlingen `registration`. Et manglende, ugyldigt eller genbrugt token stopper tilmeldingen. Hemmeligheden sendes ikke til browseren og skrives ikke i loggen.
 
-Piloten følger `feature/public-pilot-finalization`. Registreringen er lukket. Der er ikke lavet en rigtig tilmelding.
+Piloten følger stadig `feature/public-pilot-finalization`. Registreringen er lukket. Én kontrolleret tilmelding er gennemført og beholdt. Forløbet står i `CONTROLLED_SIGNUP.md`.
 
 ## Provision
 

@@ -55,6 +55,18 @@ class RegistrationTests(unittest.TestCase):
     def setUp(self):
         captcha.reset_seen()
 
+    def test_signup_link_requires_type_and_hash(self):
+        self.assertTrue(registration.signup_link_present({"type": "signup", "token_hash": "hash-1"}))
+        self.assertFalse(registration.signup_link_present({"type": "recovery", "token_hash": "hash-1"}))
+        self.assertFalse(registration.signup_link_present({"token_hash": "hash-1"}))
+        self.assertFalse(registration.signup_link_present({"type": "signup", "token_hash": "  "}))
+        template = (ROOT / "docs" / "production" / "email" / "signup-confirmation.txt").read_text(encoding="utf-8")
+        guide = (ROOT / "docs" / "production" / "SIGNUP_CONFIRMATION.md").read_text(encoding="utf-8")
+        self.assertIn("{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=signup", template)
+        self.assertIn("SIGNUP CONFIRMATION TEMPLATE OWNER ACTION REQUIRED", guide)
+        self.assertNotIn("eyJ", guide)
+        self.assertNotIn("service_role", guide)
+
     def test_missing_disabled_and_unknown_flags_stay_closed(self):
         self.assertFalse(registration.registration_open({}))
         self.assertFalse(registration.registration_open({"TRADERDASH_AUTH_REGISTRATION": "disabled"}))

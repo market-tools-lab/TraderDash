@@ -1,5 +1,7 @@
 # Staging
 
+Historisk note fra 4. november 2026. Den gældende tilstand står i `CURRENT_BASELINE.md`. Preview-projektet i tabellen er slettet.
+
 Dato: 4. november 2026.
 
 | Miljø | Ref | Brug |

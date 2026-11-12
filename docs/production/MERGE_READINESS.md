@@ -1,5 +1,7 @@
 # Merge-readiness
 
+Historisk note for pull request #1 den 4. november 2026. Pull request #8 er merget senere. Den gældende tilstand står i `CURRENT_BASELINE.md`.
+
 Dato: 4. november 2026.
 
 Kontrolleret merge er udført. Pull request #1 merget `feature/supabase-auth` `8f304de5eb3baebef5f5048570c27d65b7995a4d` til `master` som `0e1f7b4a43125af36431bab82f95d848bfc882e6` den 4. november 2026 kl. 18:28 UTC. Strategien er en almindelig merge-commit. Den tidligere `master` var `4d292dae4a43c114df8818d4d7991d9b37149736`. `feature/supabase-auth` er beholdt.
