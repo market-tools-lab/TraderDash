@@ -118,6 +118,82 @@ class RegistrationTests(unittest.TestCase):
             self.assertNotIn(EMAIL, text)
             self.assertNotIn(TOKEN, text)
 
+    def test_live_signup_supplies_siteverify_and_withholds_auth_until_it_passes(self):
+        seen = {}
+
+        def fake_verify(token, *, env=None, transport=None):
+            seen["transport"] = transport
+            raise captcha.CaptchaRejected("unavailable")
+
+        auth_calls = []
+        with opened(), patch.object(captcha, "verify", fake_verify):
+            with self.assertRaises(registration.RegistrationRejected) as missing:
+                registration.submit(
+                    EMAIL,
+                    PASSPHRASE,
+                    PASSPHRASE,
+                    acknowledged=True,
+                    captcha_token=TOKEN,
+                    redirect_url=REDIRECT,
+                    transport=lambda *args: auth_calls.append(args),
+                )
+        self.assertIs(seen["transport"], captcha.https_transport)
+        self.assertEqual(missing.exception.reason, "captcha")
+        self.assertEqual(auth_calls, [])
+        self.assertFalse(registration.registration_open({}))
+        self.assertFalse(stripe_test.ENTITLEMENT_UPDATES_ENABLED)
+        self.assertFalse(account_lifecycle.DELETION_UI_ENABLED)
+        self.assertFalse(account_lifecycle.DELETION_EXECUTION_ENABLED)
+
+        site_calls = []
+
+        def siteverify(url, payload):
+            site_calls.append((url, payload["response"]))
+            if payload["response"] == "bad-token":
+                return {"success": False, "error-codes": ["invalid-input-response"]}
+            return {"success": True, "hostname": "traderdash-next.streamlit.app", "action": "registration"}
+
+        def auth(method, url, headers, body):
+            auth_calls.append(url)
+            return 200, {"user": {"id": NEW_ID}}
+
+        live = dict(OPEN)
+        live["TRADERDASH_TURNSTILE_MODE"] = "live"
+        live["TRADERDASH_TURNSTILE_SECRET_KEY"] = "live-secret-not-a-test-key"
+        live["TRADERDASH_ENV"] = "production"
+        stream = StringIO()
+        with patch.dict(os.environ, live, clear=False), redirect_stderr(stream):
+            with self.assertRaises(registration.RegistrationRejected) as rejected:
+                registration.submit(
+                    EMAIL,
+                    PASSPHRASE,
+                    PASSPHRASE,
+                    acknowledged=True,
+                    captcha_token="bad-token",
+                    redirect_url=REDIRECT,
+                    transport=auth,
+                    captcha_transport=siteverify,
+                )
+            self.assertEqual(rejected.exception.reason, "captcha")
+            self.assertEqual(auth_calls, [])
+            accepted = registration.submit(
+                EMAIL,
+                PASSPHRASE,
+                PASSPHRASE,
+                acknowledged=True,
+                captcha_token="good-live-token",
+                redirect_url=REDIRECT,
+                transport=auth,
+                captcha_transport=siteverify,
+            )
+        self.assertEqual(site_calls[0][0], captcha.SITEVERIFY_URL)
+        self.assertEqual(accepted["state"], "email_unconfirmed")
+        self.assertEqual(len(auth_calls), 1)
+        logged = stream.getvalue()
+        self.assertNotIn("live-secret-not-a-test-key", logged)
+        self.assertNotIn("bad-token", logged)
+        self.assertNotIn("good-live-token", logged)
+
     def test_valid_signup_stays_unconfirmed_and_hides_secrets(self):
         calls = []
 

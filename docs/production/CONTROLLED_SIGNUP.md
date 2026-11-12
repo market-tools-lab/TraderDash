@@ -4,6 +4,10 @@ Dato: 11. november 2026. Branch: `feature/public-pilot-finalization`.
 
 Denne tekst åbner ikke registrering. Den opretter ingen bruger og sender ingen mail. Adgangskoder og hemmelige værdier står ikke her.
 
+## Første forsøg
+
+12. november 2026 blev ét forsøg sendt, mens registrering var åben på `traderdash-next`. Svaret var "Kontoen kunne ikke oprettes." Årsagen var, at serveren kaldte Turnstile-kontrollen uden HTTPS-transporten, så tokenet ikke nåede Cloudflare. Auth blev ikke kaldt. Der blev ikke oprettet en bruger, en profil, en entitlement eller en bekræftelsesmail. Stripe og legacy var uændrede. Registreringen blev sat til `disabled` bagefter. Et nyt forsøg venter, til rettelsen er grøn og ude på piloten.
+
 Piloten er `https://traderdash-next.streamlit.app`. Legacy er `https://traderdash-market.streamlit.app` og røres ikke. Én testkonto beholdes bagefter. Sletning testes ikke.
 
 ## Før testen

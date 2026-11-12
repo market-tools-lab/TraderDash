@@ -136,3 +136,39 @@ def verify(
     if response_action != ACTION:
         raise CaptchaRejected("action")
     _SEEN.add(presented)
+
+
+def https_transport(url: str, payload: Mapping[str, str]) -> Mapping[str, Any]:
+    """POST a siteverify body with the server-side HTTPS caller.
+
+    A network or provider failure raises TimeoutError. verify() turns that
+    into a closed result. This function does not log the secret or the token.
+    """
+    import json
+    import urllib.error
+    import urllib.request
+
+    body = {
+        "secret": str(payload.get("secret") or ""),
+        "response": str(payload.get("response") or ""),
+    }
+    request = urllib.request.Request(
+        str(url),
+        data=json.dumps(body).encode(),
+        headers={"Accept": "application/json", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            raw = response.read()
+    except urllib.error.HTTPError as exc:
+        raw = exc.read()
+    except (urllib.error.URLError, TimeoutError, OSError):
+        raise TimeoutError("siteverify unreachable") from None
+    try:
+        parsed = json.loads(raw.decode()) if raw else {}
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise OSError("siteverify unreadable") from None
+    if not isinstance(parsed, Mapping):
+        raise OSError("siteverify unreadable")
+    return parsed

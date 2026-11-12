@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import unittest
+import urllib.error
+from contextlib import redirect_stderr
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 import captcha
 
@@ -89,6 +93,59 @@ class CaptchaTests(unittest.TestCase):
         with self.assertRaises(captcha.CaptchaRejected):
             captcha.verify("ok-token", env=LIVE, transport=transport)
         self.assertNotIn("live-secret", str(raised.exception))
+
+    def test_missing_live_transport_fails_closed(self):
+        with self.assertRaises(captcha.CaptchaRejected) as raised:
+            captcha.verify("ok-token", env=LIVE)
+        self.assertEqual(raised.exception.reason, "unavailable")
+        self.assertEqual(str(raised.exception), "Kontoen kunne ikke oprettes.")
+
+    def test_https_transport_posts_siteverify_without_logging_the_secret(self):
+        secret = LIVE["TRADERDASH_TURNSTILE_SECRET_KEY"]
+        token = "siteverify-token-value"
+        captured = {}
+
+        class Response:
+            def read(self):
+                return b'{"success": true, "hostname": "traderdash-next.streamlit.app", "action": "registration"}'
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+        def opener(request, timeout):
+            captured["url"] = request.full_url
+            captured["timeout"] = timeout
+            captured["body"] = request.data.decode()
+            return Response()
+
+        stream = StringIO()
+        with patch("urllib.request.urlopen", opener), redirect_stderr(stream):
+            body = captcha.https_transport(captcha.SITEVERIFY_URL, {"secret": secret, "response": token})
+            captcha.verify("fresh-live-token", env=LIVE, transport=captcha.https_transport)
+        self.assertTrue(body["success"])
+        self.assertEqual(captured["url"], captcha.SITEVERIFY_URL)
+        self.assertEqual(captured["timeout"], 30)
+        self.assertNotIn(secret, stream.getvalue())
+        self.assertNotIn(token, stream.getvalue())
+
+        def down(_request, timeout=30):
+            raise urllib.error.URLError("down")
+
+        with patch("urllib.request.urlopen", down):
+            with self.assertRaises(captcha.CaptchaRejected) as network:
+                captcha.verify("network-token", env=LIVE, transport=captcha.https_transport)
+        self.assertEqual(network.exception.reason, "timeout")
+
+        def slow(_request, timeout=30):
+            raise TimeoutError("slow")
+
+        with patch("urllib.request.urlopen", slow):
+            with self.assertRaises(captcha.CaptchaRejected) as timed:
+                captcha.verify("slow-token", env=LIVE, transport=captcha.https_transport)
+        self.assertEqual(timed.exception.reason, "timeout")
 
     def test_widget_returns_a_token_and_keeps_the_secret_out(self):
         calls = []

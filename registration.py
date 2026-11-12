@@ -83,8 +83,13 @@ def submit(
     plan: str = FREE_PLAN,
     env: Mapping[str, str] | None = None,
     transport=None,
+    captcha_transport: captcha.Transport | None = None,
 ) -> dict[str, Any]:
-    """Validate a signup. Auth is contacted only after every local gate passes."""
+    """Validate a signup. Auth is contacted only after every local gate passes.
+
+    The live path always supplies the server-side siteverify caller. A test
+    may replace that caller. verify() still refuses a missing transport.
+    """
     source = env if env is not None else os.environ
     if not registration_open(source) or _mode(source) != "supabase_auth":
         _log("REGISTRATION_BLOCKED", reason="closed")
@@ -110,7 +115,11 @@ def submit(
         _log("REGISTRATION_BLOCKED", reason="captcha")
         raise RegistrationRejected("captcha")
     try:
-        captcha.verify(captcha_token, env=source)
+        captcha.verify(
+            captcha_token,
+            env=source,
+            transport=captcha.https_transport if captcha_transport is None else captcha_transport,
+        )
     except captcha.CaptchaRejected:
         _log("REGISTRATION_BLOCKED", reason="captcha")
         raise RegistrationRejected("captcha") from None
