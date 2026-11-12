@@ -189,7 +189,33 @@ class CaptchaTests(unittest.TestCase):
         )
         page = (Path(__file__).resolve().parents[1] / "captcha_component" / "index.html").read_text(encoding="utf-8")
         self.assertIn("streamlit:setComponentValue", page)
+        self.assertIn('dataType: "json"', page)
+        self.assertIn("streamlit:componentReady", page)
+        self.assertIn("streamlit:setFrameHeight", page)
         self.assertIn('var ACTION = "registration"', page)
         self.assertIn("event.source !== window.parent", page)
+        self.assertIn("expired-callback", page)
+        self.assertIn("error-callback", page)
         self.assertNotIn(captcha.PASS_SECRET, page)
         self.assertNotIn("TRADERDASH_TURNSTILE_SECRET_KEY", page)
+        app = (Path(__file__).resolve().parents[1] / "app.py").read_text(encoding="utf-8")
+        form = app.split("def _render_supabase_registration", 1)[1].split("def _render_signup_verification", 1)[0]
+        self.assertLess(form.index('with st.form("auth_register")'), form.index("captcha.render_widget"))
+        self.assertLess(form.index("captcha.remember_token"), form.index('st.form_submit_button("Opret konto")'))
+        self.assertLess(form.index("if not submitted:"), form.index("captcha.discard_token"))
+
+    def test_session_keeps_a_token_the_form_rerun_no_longer_returns(self):
+        state = {}
+        token = "a" * 20
+        self.assertEqual(captcha.remember_token(state, token), token)
+        self.assertEqual(captcha.remember_token(state, ""), token)
+        self.assertEqual(captcha.remember_token(state, {"token": token}), token)
+        quoted = '"' + ("b" * 20) + '"'
+        self.assertEqual(captcha.usable_token(quoted), "b" * 20)
+        self.assertEqual(captcha.remember_token(state, quoted), "b" * 20)
+        self.assertEqual(state["traderdash_turnstile_token"], "b" * 20)
+        captcha.discard_token(state)
+        self.assertEqual(captcha.remember_token(state, ""), "")
+        self.assertNotIn("traderdash_turnstile_token", state)
+        self.assertEqual(captcha.usable_token("short"), "")
+        self.assertEqual(captcha.usable_token(None), "")

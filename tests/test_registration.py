@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import unittest
 from contextlib import redirect_stderr
@@ -193,6 +194,59 @@ class RegistrationTests(unittest.TestCase):
         self.assertNotIn("live-secret-not-a-test-key", logged)
         self.assertNotIn("bad-token", logged)
         self.assertNotIn("good-live-token", logged)
+        blocked = [json.loads(line) for line in logged.splitlines() if "REGISTRATION_BLOCKED" in line]
+        self.assertEqual(blocked, [{"category": "REGISTRATION_BLOCKED", "correlation_id": blocked[0]["correlation_id"], "reason": "invalid", "stage": "siteverify"}])
+
+    def test_captcha_stages_stay_closed_and_omit_the_token(self):
+        live = dict(OPEN)
+        live["TRADERDASH_TURNSTILE_MODE"] = "live"
+        live["TRADERDASH_TURNSTILE_SECRET_KEY"] = "live-secret-not-a-test-key"
+        live["TRADERDASH_ENV"] = "production"
+        secret = live["TRADERDASH_TURNSTILE_SECRET_KEY"]
+
+        def siteverify(url, payload):
+            kind = payload["response"]
+            if kind == "timeout-token":
+                raise TimeoutError("timed out")
+            if kind == "spent-token-value":
+                return {"success": False, "error-codes": ["timeout-or-duplicate"]}
+            if kind == "host-token-value":
+                return {"success": True, "hostname": "example.invalid", "action": "registration"}
+            if kind == "action-token-value":
+                return {"success": True, "hostname": "traderdash-next.streamlit.app", "action": "login"}
+            return {"success": False, "error-codes": ["invalid-input-response"]}
+
+        cases = (
+            ("", "token", "missing"),
+            ("timeout-token", "timeout", "siteverify"),
+            ("spent-token-value", "reused", "siteverify"),
+            ("host-token-value", "hostname", "hostname"),
+            ("action-token-value", "action", "action"),
+        )
+        for presented, reason, stage in cases:
+            stream = StringIO()
+            auth_calls = []
+            with patch.dict(os.environ, live, clear=False), redirect_stderr(stream):
+                with self.assertRaises(registration.RegistrationRejected) as raised:
+                    registration.submit(
+                        EMAIL,
+                        PASSPHRASE,
+                        PASSPHRASE,
+                        acknowledged=True,
+                        captcha_token=presented,
+                        redirect_url=REDIRECT,
+                        transport=lambda *args: auth_calls.append(args),
+                        captcha_transport=siteverify,
+                    )
+            self.assertEqual(raised.exception.reason, "captcha")
+            self.assertEqual(str(raised.exception), "Kontoen kunne ikke oprettes.")
+            self.assertEqual(auth_calls, [])
+            payload = json.loads(stream.getvalue().strip())
+            self.assertEqual(payload["category"], "REGISTRATION_BLOCKED")
+            self.assertEqual(payload["reason"], reason)
+            self.assertEqual(payload["stage"], stage)
+            self.assertNotIn(secret, stream.getvalue())
+            self.assertNotIn(presented, stream.getvalue()) if presented else None
 
     def test_valid_signup_stays_unconfirmed_and_hides_secrets(self):
         calls = []

@@ -13,6 +13,7 @@
       var ACTION = "registration";
       var rendered = false;
       var latest = null;
+      var held = "";
 
       function send(type, data) {
         var payload = { isStreamlitMessage: true, type: type };
@@ -20,6 +21,24 @@
           Object.keys(data).forEach(function (key) { payload[key] = data[key]; });
         }
         window.parent.postMessage(payload, "*");
+      }
+
+      function publish(value) {
+        send("streamlit:setComponentValue", { value: value, dataType: "json" });
+      }
+
+      function deliver(token) {
+        held = token;
+        publish(token);
+        var tries = 0;
+        var timer = window.setInterval(function () {
+          tries += 1;
+          if (tries > 2 || held !== token) {
+            window.clearInterval(timer);
+            return;
+          }
+          publish(token);
+        }, 250);
       }
 
       function siteKeyOk(value) {
@@ -34,9 +53,13 @@
         window.turnstile.render(document.getElementById("widget"), {
           sitekey: latest.sitekey,
           action: ACTION,
-          callback: function (token) { send("streamlit:setComponentValue", { value: token, dataType: "json" }); },
-          "expired-callback": function () { send("streamlit:setComponentValue", { value: "", dataType: "json" }); },
-          "error-callback": function () { send("streamlit:setComponentValue", { value: "", dataType: "json" }); }
+          callback: function (token) {
+            if (typeof token === "string" && token) {
+              deliver(token);
+            }
+          },
+          "expired-callback": function () { held = ""; publish(""); },
+          "error-callback": function () { held = ""; publish(""); }
         });
         send("streamlit:setFrameHeight", { height: 80 });
       }
@@ -47,7 +70,7 @@
         script.async = true;
         script.setAttribute("data-turnstile", "registration");
         script.onload = mount;
-        script.onerror = function () { send("streamlit:setComponentValue", { value: "", dataType: "json" }); };
+        script.onerror = function () { held = ""; publish(""); };
         document.head.appendChild(script);
       }
 
@@ -68,4 +91,3 @@
     })();
   </script>
 </body>
-</html>

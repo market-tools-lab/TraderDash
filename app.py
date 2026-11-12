@@ -645,11 +645,12 @@ def _render_supabase_reset() -> None:
 
 
 def _render_supabase_registration() -> None:
-    token = captcha.render_widget(captcha.site_key())
-    if token is None:
-        st.caption("Bekræftelsen er ikke sat op.")
-        token = ""
     with st.form("auth_register"):
+        token = captcha.render_widget(captcha.site_key())
+        if token is None:
+            st.caption("Bekræftelsen er ikke sat op.")
+            token = ""
+        token = captcha.remember_token(st.session_state, token)
         email = st.text_input("E-mail", key="auth_register_email")
         password = st.text_input("Adgangskode", type="password", key="auth_register_password")
         confirmation = st.text_input("Gentag adgangskode", type="password", key="auth_register_confirmation")
@@ -662,13 +663,15 @@ def _render_supabase_registration() -> None:
         submitted = st.form_submit_button("Opret konto")
     if not submitted:
         return
+    held = token
+    captcha.discard_token(st.session_state)
     try:
         result = registration.submit(
             email,
             password,
             confirmation,
             acknowledged=bool(acknowledged),
-            captcha_token=token,
+            captcha_token=held,
             redirect_url=supabase_auth.configured_redirect(),
         )
     except registration.RegistrationRejected as exc:

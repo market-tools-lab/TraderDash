@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, MutableMapping
 from urllib.parse import urlsplit
 
 SITEVERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
@@ -22,6 +22,7 @@ PASS_SITE_KEY = "1x00000000000000000000AA"
 _TEST_SECRETS = frozenset({PASS_SECRET, FAIL_SECRET, SPENT_SECRET})
 _SITE_KEY = re.compile(r"^[0-9A-Za-z_-]{10,80}$")
 _TOKEN = re.compile(r"^[A-Za-z0-9._-]{20,2048}$")
+_TOKEN_STATE = "traderdash_turnstile_token"
 _SEEN: set[str] = set()
 _COMPONENT = None
 Transport = Callable[[str, Mapping[str, str]], Mapping[str, Any]]
@@ -82,10 +83,39 @@ def render_widget(
     if not site_key_allowed(key, env):
         return None
     runner = component or _mount
-    value = runner(key, ACTION)
-    if not isinstance(value, str) or not _TOKEN.fullmatch(value):
+    return usable_token(runner(key, ACTION))
+
+
+def usable_token(value: Any) -> str:
+    """Return a token string. One JSON string layer from the component channel is accepted."""
+    if not isinstance(value, str):
         return ""
-    return value
+    candidate = value.strip()
+    if _TOKEN.fullmatch(candidate):
+        return candidate
+    if len(candidate) >= 2 and candidate[0] == '"' and candidate[-1] == '"':
+        inner = candidate[1:-1]
+        if _TOKEN.fullmatch(inner):
+            return inner
+    return ""
+
+
+def remember_token(state: MutableMapping[str, Any], value: Any) -> str:
+    """Keep the latest usable token for the signup form.
+
+    The browser challenge can finish on an earlier run than the form submit.
+    An empty component value does not erase a token already held for this session.
+    """
+    found = usable_token(value)
+    if found:
+        state[_TOKEN_STATE] = found
+        return found
+    return usable_token(state.get(_TOKEN_STATE))
+
+
+def discard_token(state: MutableMapping[str, Any]) -> None:
+    """Drop the held token after a signup attempt so it is not replayed."""
+    state.pop(_TOKEN_STATE, None)
 
 
 def verify(

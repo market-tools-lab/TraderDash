@@ -112,7 +112,7 @@ def submit(
         _log("REGISTRATION_BLOCKED", reason="acknowledgement")
         raise RegistrationRejected("acknowledgement")
     if CAPTCHA_REQUIRED and not str(captcha_token or "").strip():
-        _log("REGISTRATION_BLOCKED", reason="captcha")
+        _log("REGISTRATION_BLOCKED", reason="token", stage="missing")
         raise RegistrationRejected("captcha")
     try:
         captcha.verify(
@@ -120,8 +120,8 @@ def submit(
             env=source,
             transport=captcha.https_transport if captcha_transport is None else captcha_transport,
         )
-    except captcha.CaptchaRejected:
-        _log("REGISTRATION_BLOCKED", reason="captcha")
+    except captcha.CaptchaRejected as exc:
+        _log_captcha(exc.reason)
         raise RegistrationRejected("captcha") from None
     if not supabase_auth.delivery_enabled() or not supabase_auth.allowed_redirect(redirect_url):
         _log("REGISTRATION_BLOCKED", reason="unavailable")
@@ -395,6 +395,25 @@ def _state(findings: list[str]) -> str:
     if findings:
         return "reconciliation_required"
     return "incomplete"
+
+
+_CAPTCHA_STAGES = {
+    "token": "replay",
+    "missing_configuration": "verify",
+    "test_key_refused": "verify",
+    "unavailable": "transport",
+    "timeout": "siteverify",
+    "invalid": "siteverify",
+    "reused": "siteverify",
+    "hostname": "hostname",
+    "action": "action",
+}
+
+
+def _log_captcha(reason: str) -> None:
+    """Log a closed Turnstile result. The reason is a fixed label, never the token."""
+    safe = reason if reason in _CAPTCHA_STAGES else "captcha"
+    _log("REGISTRATION_BLOCKED", reason=safe, stage=_CAPTCHA_STAGES.get(safe, "verify"))
 
 
 def _log(category: str, **fields: Any) -> None:
