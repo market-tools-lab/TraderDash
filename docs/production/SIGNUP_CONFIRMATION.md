@@ -16,11 +16,15 @@ Samme kontrakt som den prøvede nulstilling. Skabelonerne ligger i `docs/product
 {{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=signup
 ```
 
-`{{ .RedirectTo }}` er `TRADERDASH_AUTH_REDIRECT_URL` uden query. På piloten er den `https://traderdash-next.streamlit.app`, og den skal stå eksakt i allowlisten. Emnet kan være `Bekræft din TraderDash-konto`. Brødteksten er filerne ovenfor.
+`{{ .RedirectTo }}` er `TRADERDASH_AUTH_REDIRECT_URL` uden query. På piloten er den `https://traderdash-next.streamlit.app`, og den skal stå eksakt i allowlisten. Emnet er `Bekræft din TraderDash-konto`. Brødteksten er filerne ovenfor. `traderdash-market` er ikke Auth-tilmeldingens adresse.
 
 Appen accepterer kun `type=signup` sammen med `token_hash`. Den kalder `POST /auth/v1/verify`, bruger den midlertidige session til `provision_traderdash_free_self()` med en tom body, læser profil og entitlement igen, lukker sessionen og viser `E-mailen er bekræftet. Log ind.` når der er præcis én aktiv Free-entitlement med kilden `signup`. Det er 30 papirer. Et andet projekt, en udløbet verify, Nordic, International eller en betalt kilde giver ikke adgang. Query-parametrene slettes. Token og hemmelighed logges ikke.
 
 Bekræftelseskaldet kører kun, mens `TRADERDASH_AUTH_REGISTRATION` er `enabled`. Et link, der åbnes efter at vinduet er lukket, starter ikke et nyt Auth-kald. Login-genoptagelsen er vejen for den allerede bekræftede konto.
+
+## Release
+
+Login-genoptagelsen er den blivende reserve. Den kører også, når registreringen er lukket. Den glade vej kræver, at production-skabelonen i Supabase er skiftet til linket ovenfor. Registreringen forbliver lukket. Merget af denne kode kræver ikke en ny rigtig tilmelding. Skabelonskiftet kan rulles tilbage ved at sætte den tidligere Confirm signup-tekst ind igen. Repositoriet er den tekniske kilde. D-drevet indgår ikke i driften.
 
 ## SIGNUP CONFIRMATION TEMPLATE OWNER ACTION REQUIRED
 

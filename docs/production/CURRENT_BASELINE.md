@@ -37,4 +37,4 @@ Der er to Auth-brugere og to profiler. Den migrerede pilot har én aktiv TraderD
 
 ## Sikkerhed
 
-Registrering er lukket. Stripe er slået fra. Sletning er slået fra. Ingen hemmelige værdier står i denne fil.
+Registrering er lukket. Stripe er slået fra. Sletning er slået fra. Ingen hemmelige værdier står i denne fil. Repositoriet er den tekniske kilde. D-drevet indgår ikke i driften. Bekræftelsens glade vej og reserven ved login står i `SIGNUP_CONFIRMATION.md`. En merge af den tekst kræver ikke en ny tilmelding.

@@ -61,11 +61,52 @@ class RegistrationTests(unittest.TestCase):
         self.assertFalse(registration.signup_link_present({"token_hash": "hash-1"}))
         self.assertFalse(registration.signup_link_present({"type": "signup", "token_hash": "  "}))
         template = (ROOT / "docs" / "production" / "email" / "signup-confirmation.txt").read_text(encoding="utf-8")
+        html = (ROOT / "docs" / "production" / "email" / "signup-confirmation.html").read_text(encoding="utf-8")
         guide = (ROOT / "docs" / "production" / "SIGNUP_CONFIRMATION.md").read_text(encoding="utf-8")
         self.assertIn("{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=signup", template)
-        self.assertIn("SIGNUP CONFIRMATION TEMPLATE OWNER ACTION REQUIRED", guide)
+        self.assertIn('href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=signup"', html)
+        for body in (template, html):
+            self.assertNotIn("traderdash-market", body)
+            self.assertNotIn("eyJ", body)
+            self.assertNotIn("service_role", body)
         self.assertNotIn("eyJ", guide)
         self.assertNotIn("service_role", guide)
+        self.assertIn("`traderdash-market` er ikke Auth-tilmeldingens adresse", guide)
+        self.assertNotIn("https://", template)
+        self.assertNotIn("https://", html)
+        self.assertIn("Bekræft adressen", html)
+        self.assertIn("SIGNUP CONFIRMATION TEMPLATE OWNER ACTION REQUIRED", guide)
+        self.assertIn("Login-genoptagelsen er den blivende reserve", guide)
+
+    def test_invalid_verify_and_closed_registration_do_not_enroll(self):
+        calls = []
+
+        def transport(method, url, headers, body):
+            calls.append(url)
+            if url.endswith("/auth/v1/verify"):
+                return 403, {"error": "invalid"}
+            raise AssertionError(url)
+
+        stream = StringIO()
+        with opened(), redirect_stderr(stream):
+            with self.assertRaises(registration.RegistrationRejected) as raised:
+                registration.complete_verification("token-hash-1", {}, transport=transport)
+        self.assertEqual(raised.exception.reason, "expired")
+        self.assertNotIn("token-hash-1", str(raised.exception))
+        self.assertNotIn("token-hash-1", stream.getvalue())
+        self.assertEqual(len(calls), 1)
+
+        def closed_transport(*_args):
+            raise AssertionError("closed registration called Auth")
+
+        with patch.dict(
+            os.environ,
+            {"TRADERDASH_AUTH_MODE": "supabase_auth", "TRADERDASH_AUTH_REGISTRATION": "disabled"},
+            clear=False,
+        ):
+            with self.assertRaises(registration.RegistrationRejected) as closed:
+                registration.complete_verification("token-hash-1", {}, transport=closed_transport)
+        self.assertEqual(closed.exception.reason, "closed")
 
     def test_missing_disabled_and_unknown_flags_stay_closed(self):
         self.assertFalse(registration.registration_open({}))
